@@ -39,6 +39,7 @@
 #include <moveit/utils/robot_model_test_utils.h>
 #include <moveit/utils/eigen_test_utils.h>
 #include <kdl/chainjnttojacsolver.hpp>
+#include <kdl/chainjnttojacdotsolver.hpp>
 #include <kdl/tree.hpp>
 #include <kdl_parser/kdl_parser.hpp>
 
@@ -72,31 +73,30 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   ROS_WARN("Testing SimpleRobotJacobianDerivative!");
 
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd jacobian, jacobian_derivative;
+  Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   bool use_quaternion_representation = false;
-
   auto joint_model_group = robot_model_->getJointModelGroup("group");
 
+  //-----------------------Test for this state-----------------------
+  std::vector<double> test_q{45.0 * M_PI / 180.0, 1.0};
+  std::vector<double> test_qdot{0.1, 0.0};
+
+  //-----------------------Set robot state-----------------------
   robot_state_->setJointGroupPositions(joint_model_group, 
-                                       std::vector<double>{ 45.0 * M_PI / 180.0, 1.0 });
+                                       test_q);
   
+  std::cout << "robot_state_->hasVelocities() = " << robot_state_->hasVelocities() << "\n";
+  robot_state_->setJointGroupVelocities(joint_model_group, 
+                                        test_qdot);
+  std::cout << "robot_state_->hasVelocities() = " << robot_state_->hasVelocities() << "\n";
 
-  const std::vector<std::string>& joint_names = joint_model_group->getVariableNames();
-  std::cout << "Joint names = \n";
-  for(auto joint_name : joint_names)
-    std::cout << joint_name << "\n";
-
-  std::vector<double> joint_values;
-  robot_state_->copyJointGroupPositions(joint_model_group, joint_values);
-  std::cout << "Joint values = \n";
-  for(auto joint_value : joint_values)
-    std::cout << joint_value << "\n";
-
+  //-----------------------Calculate Jacobian in Moveit-----------------------
   robot_state_->getJacobian(joint_model_group,
                             robot_state_->getLinkModel("c"),
-                            reference_point_position, jacobian,
+                            reference_point_position, moveit_jacobian,
                             use_quaternion_representation);
   
+  //-----------------------Calculate Jacobian with KDL-----------------------
   //Using KDL for testing
   //Taken from pr2_arm_kinematics_plugin getKDLChain
   KDL::Chain kdl_chain;
@@ -113,18 +113,34 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   auto kdl_jacobian_solver = KDL::ChainJntToJacSolver(kdl_chain);
   KDL::Jacobian kdl_jacobian(kdl_chain.getNrOfJoints());
   KDL::JntArray kdl_jnt_array(2);
-  kdl_jnt_array.data << 45.0 * M_PI / 180.0, 1.0;
+  kdl_jnt_array.data << test_q[0],test_q[1];
   kdl_jacobian_solver.JntToJac(kdl_jnt_array, kdl_jacobian);
 
+  //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(joint_model_group,
                                       robot_state_->getLinkModel("c"),
-                                      reference_point_position, jacobian_derivative,
+                                      reference_point_position, moveit_jacobian_derivative,
                                       use_quaternion_representation);
 
-  std::cout << "Moveit Jacobian = \n" << jacobian << "\n\n";
+  //-----------------------Calculate Jacobian Derivative with KDL-----------------------
+  auto kdl_jacobian_dot_solver = KDL::ChainJntToJacDotSolver(kdl_chain);
+  KDL::Jacobian kdl_jacobian_dot(kdl_chain.getNrOfJoints());
+  KDL::JntArray kdl_jnt_array_qdot(2);
+  kdl_jnt_array_qdot.data << test_qdot[0],test_qdot[1];
+
+  KDL::JntArrayVel kdl_jnt_array_vel;
+  kdl_jnt_array_vel.q = kdl_jnt_array;
+  kdl_jnt_array_vel.qdot = kdl_jnt_array_qdot;
+
+  kdl_jacobian_dot_solver.JntToJacDot(kdl_jnt_array_vel, kdl_jacobian_dot);
+
+  //-----------------------Output to compare jacobians-----------------------
+
+  std::cout << "Moveit Jacobian = \n" << moveit_jacobian << "\n\n";
   std::cout << "KDL Jacobian = \n" << kdl_jacobian.data << "\n\n";
 
-  std::cout << "Moveit Jacobian Derivative\n" << jacobian_derivative << "\n\n";
+  std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
+  std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_dot.data << "\n\n";
 
   EXPECT_EQ(1.0, 1.0); 
 }

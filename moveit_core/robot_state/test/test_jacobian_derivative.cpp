@@ -47,10 +47,11 @@ protected:
   void SetUp() override
   {
     RobotModelBuilder builder("simple", "a");
-    builder.addChain("a->b", "continuous");
-    builder.addChain("b->c", "prismatic");
+    builder.addChain("a->b", "continuous", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
+    builder.addChain("b->c", "prismatic", {}, urdf::Vector3(1, 0, 0));  //Translates along the x-axis
     builder.addGroupChain("a", "c", "group");
     robot_model_ = builder.build();
+    robot_state_ = std::make_shared<RobotState>(robot_model_);
   }
 
   void TearDown() override
@@ -59,11 +60,49 @@ protected:
 
 protected:
   RobotModelConstPtr robot_model_;
+  RobotStatePtr robot_state_;
 };
+
 
 TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
 {
   ROS_WARN("Testing SimpleRobotJacobianDerivative!");
+
+  Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
+  Eigen::MatrixXd jacobian, jacobian_derivative;
+  bool use_quaternion_representation = false;
+
+  auto joint_model_group = robot_model_->getJointModelGroup("group");
+
+  robot_state_->setJointGroupPositions(joint_model_group, 
+                                       std::vector<double>{ 45.0 * M_PI / 180.0, 1.0 });
+  
+
+  const std::vector<std::string>& joint_names = joint_model_group->getVariableNames();
+  std::cout << "Joint names = \n";
+  for(auto joint_name : joint_names)
+    std::cout << joint_name << "\n";
+
+  std::vector<double> joint_values;
+  robot_state_->copyJointGroupPositions(joint_model_group, joint_values);
+  std::cout << "Joint values = \n";
+  for(auto joint_value : joint_values)
+    std::cout << joint_value << "\n";
+
+  robot_state_->getJacobian(joint_model_group,
+                            robot_state_->getLinkModel("c"),
+                            reference_point_position, jacobian,
+                            use_quaternion_representation);
+
+  robot_state_->getJacobianDerivative(joint_model_group,
+                                      robot_state_->getLinkModel("c"),
+                                      reference_point_position, jacobian_derivative,
+                                      use_quaternion_representation);
+
+  std::cout << "test!\n" << jacobian << "\n\n";
+
+  std::cout << "test!\n" << jacobian_derivative << "\n\n";
+
   EXPECT_EQ(1.0, 1.0); 
 }
 

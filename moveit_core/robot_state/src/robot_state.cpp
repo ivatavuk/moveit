@@ -1403,6 +1403,114 @@ bool RobotState::getJacobian(const JointModelGroup* group, const LinkModel* link
   return true;
 }
 
+bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkModel* link,
+                                       const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian_derivative,
+                                       bool use_quaternion_representation) const
+{
+  BOOST_VERIFY(checkLinkTransforms());
+
+  if (!group->isChain())
+  {
+    ROS_ERROR_NAMED(LOGNAME, "The group '%s' is not a chain. Cannot compute Jacobian.", group->getName().c_str());
+    return false;
+  }
+
+  if (!group->isLinkUpdated(link->getName()))
+  {
+    ROS_ERROR_NAMED(LOGNAME, "Link name '%s' does not exist in the chain '%s' or is not a child for this chain",
+                    link->getName().c_str(), group->getName().c_str());
+    return false;
+  }
+
+  const moveit::core::JointModel* root_joint_model = group->getJointModels()[0];  // group->getJointRoots()[0];
+  const moveit::core::LinkModel* root_link_model = root_joint_model->getParentLinkModel();
+  // getGlobalLinkTransform() returns a valid isometry by contract
+  Eigen::Isometry3d reference_transform =
+      root_link_model ? getGlobalLinkTransform(root_link_model).inverse() : Eigen::Isometry3d::Identity();
+  int rows = use_quaternion_representation ? 7 : 6;
+  int columns = group->getVariableCount();
+  jacobian_derivative = Eigen::MatrixXd::Zero(rows, columns);
+
+  // getGlobalLinkTransform() returns a valid isometry by contract
+  Eigen::Isometry3d link_transform = reference_transform * getGlobalLinkTransform(link);  // valid isometry
+  Eigen::Vector3d point_transform = link_transform * reference_point_position;
+
+  /*
+  ROS_DEBUG_NAMED(LOGNAME, "Point from reference origin expressed in world coordinates: %f %f %f",
+           point_transform.x(),
+           point_transform.y(),
+           point_transform.z());
+  */
+
+  Eigen::Vector3d joint_axis;
+  Eigen::Isometry3d joint_transform;
+
+  while (link)
+  {
+    /*
+    ROS_DEBUG_NAMED(LOGNAME, "Link: %s, %f %f %f",link_state->getName().c_str(),
+             link_state->getGlobalLinkTransform().translation().x(),
+             link_state->getGlobalLinkTransform().translation().y(),
+             link_state->getGlobalLinkTransform().translation().z());
+    ROS_DEBUG_NAMED(LOGNAME, "Joint: %s",link_state->getParentJointState()->getName().c_str());
+    */
+    const JointModel* pjm = link->getParentJointModel();
+    if (pjm->getVariableCount() > 0)
+    {
+      if (!group->hasJointModel(pjm->getName()))
+      {
+        link = pjm->getParentLinkModel();
+        continue;
+      }
+      unsigned int joint_index = group->getVariableGroupIndex(pjm->getName());
+      // getGlobalLinkTransform() returns a valid isometry by contract
+      joint_transform = reference_transform * getGlobalLinkTransform(link);  // valid isometry
+      if (pjm->getType() == moveit::core::JointModel::REVOLUTE)
+      {
+        joint_axis = joint_transform.linear() * static_cast<const moveit::core::RevoluteJointModel*>(pjm)->getAxis();
+        jacobian_derivative.block<3, 1>(0, joint_index) =
+            jacobian_derivative.block<3, 1>(0, joint_index) + joint_axis.cross(point_transform - joint_transform.translation());
+        jacobian_derivative.block<3, 1>(3, joint_index) = jacobian_derivative.block<3, 1>(3, joint_index) + joint_axis;
+      }
+      else if (pjm->getType() == moveit::core::JointModel::PRISMATIC)
+      {
+        joint_axis = joint_transform.linear() * static_cast<const moveit::core::PrismaticJointModel*>(pjm)->getAxis();
+        jacobian_derivative.block<3, 1>(0, joint_index) = jacobian_derivative.block<3, 1>(0, joint_index) + joint_axis;
+      }
+      else if (pjm->getType() == moveit::core::JointModel::PLANAR)
+      {
+        joint_axis = joint_transform * Eigen::Vector3d(1.0, 0.0, 0.0);
+        jacobian_derivative.block<3, 1>(0, joint_index) = jacobian_derivative.block<3, 1>(0, joint_index) + joint_axis;
+        joint_axis = joint_transform * Eigen::Vector3d(0.0, 1.0, 0.0);
+        jacobian_derivative.block<3, 1>(0, joint_index + 1) = jacobian_derivative.block<3, 1>(0, joint_index + 1) + joint_axis;
+        joint_axis = joint_transform * Eigen::Vector3d(0.0, 0.0, 1.0);
+        jacobian_derivative.block<3, 1>(0, joint_index + 2) = jacobian_derivative.block<3, 1>(0, joint_index + 2) +
+                                                   joint_axis.cross(point_transform - joint_transform.translation());
+        jacobian_derivative.block<3, 1>(3, joint_index + 2) = jacobian_derivative.block<3, 1>(3, joint_index + 2) + joint_axis;
+      }
+      else
+        ROS_ERROR_NAMED(LOGNAME, "Unknown type of joint in Jacobian computation");
+    }
+    if (pjm == root_joint_model)
+      break;
+    link = pjm->getParentLinkModel();
+  }
+  if (use_quaternion_representation)
+  {  // Quaternion representation
+    // From "Advanced Dynamics and Motion Simulation" by Paul Mitiguy
+    // d/dt ( [w] ) = 1/2 * [ -x -y -z ]  * [ omega_1 ]
+    //        [x]           [  w -z  y ]    [ omega_2 ]
+    //        [y]           [  z  w -x ]    [ omega_3 ]
+    //        [z]           [ -y  x  w ]
+    Eigen::Quaterniond q(link_transform.linear());
+    double w = q.w(), x = q.x(), y = q.y(), z = q.z();
+    Eigen::MatrixXd quaternion_update_matrix(4, 3);
+    quaternion_update_matrix << -x, -y, -z, w, -z, y, z, w, -x, -y, x, w;
+    jacobian_derivative.block(3, 0, 4, columns) = 0.5 * quaternion_update_matrix * jacobian_derivative.block(3, 0, 3, columns);
+  }
+  return true;
+}
+
 bool RobotState::setFromDiffIK(const JointModelGroup* jmg, const Eigen::VectorXd& twist, const std::string& tip,
                                double dt, const GroupStateValidityCallbackFn& constraint)
 {

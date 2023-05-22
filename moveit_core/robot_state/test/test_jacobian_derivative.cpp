@@ -38,6 +38,9 @@
 #include <moveit/robot_state/robot_state.h>
 #include <moveit/utils/robot_model_test_utils.h>
 #include <moveit/utils/eigen_test_utils.h>
+#include <kdl/chainjnttojacsolver.hpp>
+#include <kdl/tree.hpp>
+#include <kdl_parser/kdl_parser.hpp>
 
 using namespace moveit::core;
 
@@ -93,15 +96,35 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
                             robot_state_->getLinkModel("c"),
                             reference_point_position, jacobian,
                             use_quaternion_representation);
+  
+  //Using KDL for testing
+  //Taken from pr2_arm_kinematics_plugin getKDLChain
+  KDL::Chain kdl_chain;
+  KDL::Tree tree;
+  if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree))
+  {
+    ROS_ERROR("Could not initialize tree object");
+  }
+  if (!tree.getChain("a", "c", kdl_chain))
+  {
+    ROS_ERROR_STREAM("Could not initialize chain object for base " << "a" << " tip " << "c");
+  }
+
+  auto kdl_jacobian_solver = KDL::ChainJntToJacSolver(kdl_chain);
+  KDL::Jacobian kdl_jacobian(kdl_chain.getNrOfJoints());
+  KDL::JntArray kdl_jnt_array(2);
+  kdl_jnt_array.data << 45.0 * M_PI / 180.0, 1.0;
+  kdl_jacobian_solver.JntToJac(kdl_jnt_array, kdl_jacobian);
 
   robot_state_->getJacobianDerivative(joint_model_group,
                                       robot_state_->getLinkModel("c"),
                                       reference_point_position, jacobian_derivative,
                                       use_quaternion_representation);
 
-  std::cout << "test!\n" << jacobian << "\n\n";
+  std::cout << "Moveit Jacobian = \n" << jacobian << "\n\n";
+  std::cout << "KDL Jacobian = \n" << kdl_jacobian.data << "\n\n";
 
-  std::cout << "test!\n" << jacobian_derivative << "\n\n";
+  std::cout << "Moveit Jacobian Derivative\n" << jacobian_derivative << "\n\n";
 
   EXPECT_EQ(1.0, 1.0); 
 }

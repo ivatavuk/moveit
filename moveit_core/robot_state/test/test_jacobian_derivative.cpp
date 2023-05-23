@@ -70,7 +70,7 @@ protected:
 
 TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
 {
-  ROS_WARN("Testing SimpleRobotJacobianDerivative!");
+  std::cout << "Testing SimpleRobotJacobianDerivative!\n";
 
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
@@ -79,17 +79,13 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
 
   //-----------------------Test for this state-----------------------
   std::vector<double> test_q{45.0 * M_PI / 180.0, 1.0};
-  std::vector<double> test_qdot{0.1, 0.0};
+  std::vector<double> test_qdot{0.1, 0.054};
 
   //-----------------------Set robot state-----------------------
   robot_state_->setJointGroupPositions(joint_model_group, 
                                        test_q);
-  
-  std::cout << "robot_state_->hasVelocities() = " << robot_state_->hasVelocities() << "\n";
   robot_state_->setJointGroupVelocities(joint_model_group, 
                                         test_qdot);
-  std::cout << "robot_state_->hasVelocities() = " << robot_state_->hasVelocities() << "\n";
-
   //-----------------------Calculate Jacobian in Moveit-----------------------
   robot_state_->getJacobian(joint_model_group,
                             robot_state_->getLinkModel("c"),
@@ -98,7 +94,6 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   
   //-----------------------Calculate Jacobian with KDL-----------------------
   //Using KDL for testing
-  //Taken from pr2_arm_kinematics_plugin getKDLChain
   KDL::Chain kdl_chain;
   KDL::Tree tree;
   if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree))
@@ -142,7 +137,7 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
   std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_dot.data << "\n\n";
 
-  EXPECT_EQ(1.0, 1.0); 
+  EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, kdl_jacobian_dot.data, 1e-5);
 }
 
 // Gracefully handle gtest 1.8 (Melodic)

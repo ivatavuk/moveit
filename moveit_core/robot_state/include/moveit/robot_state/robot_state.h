@@ -1245,7 +1245,7 @@ public:
     return static_cast<const RobotState*>(this)->getJacobian(group, reference_point_position);
   }
 
-    /** \brief Compute the time derivative of the Jacobian with reference to a particular point on a given link, for a specified group.
+  /** \brief Compute the time derivative of the Jacobian with reference to a particular point on a given link, for a specified group.
    * \param group The group to compute the Jacobian time derivative for
    * \param link The link model to compute the Jacobian time derivative for
    * \param reference_point_position The reference point position (with respect to the link specified in link)
@@ -1256,6 +1256,14 @@ public:
    */
   bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link, const Eigen::Vector3d& reference_point_position,
                              Eigen::MatrixXd& jacobian_derivative, bool use_quaternion_representation = false) const;
+
+  /** \brief Compute the partial derivative of a column of the Jacobian.
+   * \param jacobian The Jacobian
+   * \param joint_index TODO
+   * \param column_index TODO
+   * \return Eigen::VectorXd with 6 dimensions TODO
+   */
+  Eigen::VectorXd getJacobianPartialDerivative(const Eigen::MatrixXd &jacobian, int joint_index , int column_index) const;
 
   /** \brief Given a twist for a particular link (\e tip), compute the corresponding velocity for every variable and
    * store it in \e qdot */

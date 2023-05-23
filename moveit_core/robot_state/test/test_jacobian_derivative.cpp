@@ -57,7 +57,11 @@ namespace JDotTestHelpers
     {
       ROS_ERROR("Could not initialize tree object");
     }
-    if (!tree.getChain("a", "c", kdl_chain))
+    auto link_models = robot_model.getLinkModels();
+    auto root_model = link_models[0]->getName();
+    auto tip_model = link_models[q.size()]->getName();
+    
+    if (!tree.getChain(root_model, tip_model, kdl_chain))
     {
       ROS_ERROR_STREAM("Could not initialize chain object for base " << "a" << " tip " << "c");
     }
@@ -143,8 +147,8 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
   std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_derivative << "\n\n";
 
-  //EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, kdl_jacobian_derivative, 1e-5);
-  EXPECT_EQ(1.0, 1.0);
+  EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, kdl_jacobian_derivative, 1e-5);
+  //EXPECT_EQ(1.0, 1.0);
 }
 
 // Gracefully handle gtest 1.8 (Melodic)
@@ -176,9 +180,8 @@ protected:
 #ifdef _OLD_GTEST
     SetUpTestSuite();
 #endif
-    start_state_ = std::make_shared<RobotState>(robot_model_);
-    ASSERT_TRUE(start_state_->setToDefaultValues(jmg_, "ready"));
-    start_pose_ = start_state_->getGlobalLinkTransform(link_);
+    robot_state_ = std::make_shared<RobotState>(robot_model_);
+    ASSERT_TRUE(robot_state_->setToDefaultValues(jmg_, "ready"));
   }
 #ifdef _OLD_GTEST
   void TearDown() override
@@ -192,8 +195,7 @@ protected:
   _STATIC const LinkModel* link_;
 
   double prec_ = 1e-8;
-  RobotStatePtr start_state_;
-  Eigen::Isometry3d start_pose_;
+  RobotStatePtr robot_state_;
 };
 #ifndef _OLD_GTEST
 RobotModelPtr PandaRobot::robot_model_;
@@ -204,6 +206,49 @@ const LinkModel* PandaRobot::link_ = nullptr;
 TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
 {
   ROS_WARN("Testing PandaRobotJacobianDerivative!");
+
+  Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
+  Eigen::MatrixXd moveit_jacobian;
+  Eigen::MatrixXd moveit_jacobian_derivative;
+  bool use_quaternion_representation = false;
+
+  //-----------------------Test for this state-----------------------
+  std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+  std::generate(test_q.begin(), test_q.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  std::generate(test_qdot.begin(), test_qdot.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  //-----------------------Set robot state-----------------------
+  robot_state_->setJointGroupPositions(jmg_, 
+                                       test_q);
+  robot_state_->setJointGroupVelocities(jmg_, 
+                                        test_qdot);
+  robot_state_->updateLinkTransforms(); //TODO updateLinkTransforms() is needed, but it's not needed when first calling getJacobian?
+  //-----------------------Calculate Jacobian in Moveit-----------------------
+  /*robot_state_->getJacobian(joint_model_group,
+                            robot_state_->getLinkModel("c"),
+                            reference_point_position, moveit_jacobian,
+                            use_quaternion_representation);
+  */
+  //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
+  robot_state_->getJacobianDerivative(jmg_,
+                                      link_,
+                                      reference_point_position, moveit_jacobian_derivative,
+                                      use_quaternion_representation);
+
+  //-----------------------Calculate Jacobian Derivative with KDL-----------------------
+  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_);
+
+  //-----------------------Compare Jacobian Derivatives-----------------------
+  std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
+  std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_derivative << "\n\n";
+
   EXPECT_EQ(1.0, 1.0);
 }
 

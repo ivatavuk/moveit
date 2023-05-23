@@ -1407,6 +1407,14 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
                                        const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian_derivative,
                                        bool use_quaternion_representation) const
 {
+  BOOST_VERIFY(checkLinkTransforms());
+
+  if (!group->isLinkUpdated(link->getName()))
+  {
+    ROS_ERROR_NAMED(LOGNAME, "Link name '%s' does not exist in the chain '%s' or is not a child for this chain",
+                    link->getName().c_str(), group->getName().c_str());
+    return false;
+  }
   //Quaternion representation is not supported for now
   if (use_quaternion_representation)
   {
@@ -1419,9 +1427,14 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
 
   //Calculate the Jacobian
   Eigen::MatrixXd jacobian;
-  getJacobian(group, link, reference_point_position, jacobian, use_quaternion_representation);
+  bool get_jacobian_success = getJacobian(group, link, reference_point_position, jacobian, use_quaternion_representation);
 
-  //Get joint velocities
+  if(!get_jacobian_success)
+  {
+    ROS_ERROR_NAMED(LOGNAME, "Jacobian compuatation failed");
+    return false;  
+  }
+  //Get joint velocities TODO const!
   auto velocities = getJointVelocities(group->getJointModels()[0]);
 
   while(link)
@@ -1476,8 +1489,7 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
 
 Eigen::VectorXd RobotState::getJacobianPartialDerivative(const Eigen::MatrixXd &jacobian, int joint_index , int column_index) const
 {
-  //Keeping MoveIt convention where Jac_i = [v omega]^T, in KDL its [omega v]^T
-  
+  //Keeping MoveIt convention where twist is [v omega]^T, in KDL its [omega v]^T
   int j=joint_index;
   int i=column_index;
 

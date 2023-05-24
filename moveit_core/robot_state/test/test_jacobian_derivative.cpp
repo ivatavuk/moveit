@@ -47,8 +47,8 @@ using namespace moveit::core;
 
 namespace JDotTestHelpers
 {
-  KDL::Chain getKdlChain(const RobotModel &robot_model,
-                         const std::string &tip_link)
+  KDL::Chain setupKdlChain(const RobotModel &robot_model,
+                           const std::string &tip_link)
   {
     KDL::Chain kdl_chain;
     KDL::Tree tree;
@@ -66,13 +66,9 @@ namespace JDotTestHelpers
     return kdl_chain;
   }
 
-  Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double> &q, 
-                                                 const std::vector<double> &q_dot,
-                                                 const RobotModel &robot_model,
-                                                 const std::string &tip_link) 
+  KDL::JntArrayVel setupKdlJntArrayVel(const std::vector<double> &q, 
+                                       const std::vector<double> &q_dot)
   {
-    KDL::Chain kdl_chain = getKdlChain(robot_model, tip_link);
-
     KDL::JntArray kdl_jnt_array(q.size());
     kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
 
@@ -82,24 +78,36 @@ namespace JDotTestHelpers
     KDL::JntArrayVel kdl_jnt_array_vel;
     kdl_jnt_array_vel.q = kdl_jnt_array;
     kdl_jnt_array_vel.qdot = kdl_jnt_array_qdot;
+    return kdl_jnt_array_vel;
+  }
 
-    auto kdl_jacobian_dot_solver = KDL::ChainJntToJacDotSolver(kdl_chain);
+  Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double> &q, 
+                                                 const std::vector<double> &q_dot,
+                                                 const RobotModel &robot_model,
+                                                 const std::string &tip_link) 
+  {
+    KDL::Chain kdl_chain = setupKdlChain(robot_model, tip_link);
+
+    KDL::JntArrayVel kdl_jnt_array_vel = setupKdlJntArrayVel(q, q_dot);
+
+    KDL::ChainJntToJacDotSolver kdl_jacobian_dot_solver(kdl_chain);
     KDL::Jacobian kdl_jacobian_dot(kdl_chain.getNrOfJoints());
 
     kdl_jacobian_dot_solver.JntToJacDot(kdl_jnt_array_vel, kdl_jacobian_dot);
 
     return kdl_jacobian_dot.data;
   }
+  
   Eigen::MatrixXd calculateJacobianKDL(const std::vector<double> &q,
                                        const RobotModel &robot_model,
                                        const std::string &tip_link) 
   {
-    KDL::Chain kdl_chain = getKdlChain(robot_model, tip_link);
+    KDL::Chain kdl_chain = setupKdlChain(robot_model, tip_link);
 
     KDL::JntArray kdl_jnt_array(q.size());
     kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
 
-    auto kdl_jacobian_solver = KDL::ChainJntToJacSolver(kdl_chain);
+    KDL::ChainJntToJacSolver kdl_jacobian_solver(kdl_chain);
     KDL::Jacobian kdl_jacobian(kdl_chain.getNrOfJoints());
 
     kdl_jacobian_solver.JntToJac(kdl_jnt_array, kdl_jacobian);

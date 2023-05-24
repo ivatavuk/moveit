@@ -47,10 +47,8 @@ using namespace moveit::core;
 
 namespace JDotTestHelpers
 {
-  Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double> &q, 
-                                                 const std::vector<double> &q_dot,
-                                                 const RobotModel &robot_model,
-                                                 const std::string &tip_link) 
+  KDL::Chain getKdlChain(const RobotModel &robot_model,
+                         const std::string &tip_link)
   {
     KDL::Chain kdl_chain;
     KDL::Tree tree;
@@ -63,8 +61,17 @@ namespace JDotTestHelpers
     
     if (!tree.getChain(root_model, tip_link, kdl_chain))
     {
-      ROS_ERROR_STREAM("Could not initialize chain object for base " << "a" << " tip " << "c");
+      ROS_ERROR_STREAM("Could not initialize chain object for base " << root_model << " tip " << tip_link);
     }
+    return kdl_chain;
+  }
+
+  Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double> &q, 
+                                                 const std::vector<double> &q_dot,
+                                                 const RobotModel &robot_model,
+                                                 const std::string &tip_link) 
+  {
+    KDL::Chain kdl_chain = getKdlChain(robot_model, tip_link);
 
     KDL::JntArray kdl_jnt_array(q.size());
     kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
@@ -87,19 +94,7 @@ namespace JDotTestHelpers
                                        const RobotModel &robot_model,
                                        const std::string &tip_link) 
   {
-    KDL::Chain kdl_chain;
-    KDL::Tree tree;
-    if (!kdl_parser::treeFromUrdfModel( *(robot_model.getURDF()), tree) )
-    {
-      ROS_ERROR("Could not initialize tree object");
-    }
-    auto link_models = robot_model.getLinkModels();
-    auto root_model = link_models[0]->getName();
-    
-    if (!tree.getChain(root_model, tip_link, kdl_chain))
-    {
-      ROS_ERROR_STREAM("Could not initialize chain object for base " << "a" << " tip " << "c");
-    }
+    KDL::Chain kdl_chain = getKdlChain(robot_model, tip_link);
 
     KDL::JntArray kdl_jnt_array(q.size());
     kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());

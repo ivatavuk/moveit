@@ -49,7 +49,8 @@ namespace JDotTestHelpers
 {
   Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double> &q, 
                                                  const std::vector<double> &q_dot,
-                                                 const RobotModel &robot_model) 
+                                                 const RobotModel &robot_model,
+                                                 const std::string &tip_link) 
   {
     KDL::Chain kdl_chain;
     KDL::Tree tree;
@@ -59,9 +60,8 @@ namespace JDotTestHelpers
     }
     auto link_models = robot_model.getLinkModels();
     auto root_model = link_models[0]->getName();
-    auto tip_model = link_models[q.size()]->getName();
     
-    if (!tree.getChain(root_model, tip_model, kdl_chain))
+    if (!tree.getChain(root_model, tip_link, kdl_chain))
     {
       ROS_ERROR_STREAM("Could not initialize chain object for base " << "a" << " tip " << "c");
     }
@@ -82,6 +82,34 @@ namespace JDotTestHelpers
     kdl_jacobian_dot_solver.JntToJacDot(kdl_jnt_array_vel, kdl_jacobian_dot);
 
     return kdl_jacobian_dot.data;
+  }
+  Eigen::MatrixXd calculateJacobianKDL(const std::vector<double> &q,
+                                       const RobotModel &robot_model,
+                                       const std::string &tip_link) 
+  {
+    KDL::Chain kdl_chain;
+    KDL::Tree tree;
+    if (!kdl_parser::treeFromUrdfModel( *(robot_model.getURDF()), tree) )
+    {
+      ROS_ERROR("Could not initialize tree object");
+    }
+    auto link_models = robot_model.getLinkModels();
+    auto root_model = link_models[0]->getName();
+    
+    if (!tree.getChain(root_model, tip_link, kdl_chain))
+    {
+      ROS_ERROR_STREAM("Could not initialize chain object for base " << "a" << " tip " << "c");
+    }
+
+    KDL::JntArray kdl_jnt_array(q.size());
+    kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
+
+    auto kdl_jacobian_solver = KDL::ChainJntToJacSolver(kdl_chain);
+    KDL::Jacobian kdl_jacobian(kdl_chain.getNrOfJoints());
+
+    kdl_jacobian_solver.JntToJac(kdl_jnt_array, kdl_jacobian);
+
+    return kdl_jacobian.data;
   }
 }
 
@@ -118,9 +146,18 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   bool use_quaternion_representation = false;
   auto joint_model_group = robot_model_->getJointModelGroup("group");
 
-  //-----------------------Test for this state-----------------------
-  std::vector<double> test_q{45.0 * M_PI / 180.0, 1.0};
-  std::vector<double> test_qdot{0.1, 0.054};
+  //-----------------------Test for random state-----------------------
+  std::vector<double> test_q{0.0, 0.0};
+  std::vector<double> test_qdot{0.0, 0.0};
+
+  srand (time(NULL));
+  std::generate(test_q.begin(), test_q.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  std::generate(test_qdot.begin(), test_qdot.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
 
   //-----------------------Set robot state-----------------------
   robot_state_->setJointGroupPositions(joint_model_group, 
@@ -128,12 +165,7 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   robot_state_->setJointGroupVelocities(joint_model_group, 
                                         test_qdot);
   robot_state_->updateLinkTransforms(); //TODO updateLinkTransforms() is needed, but it's not needed when first calling getJacobian?
-  //-----------------------Calculate Jacobian in Moveit-----------------------
-  /*robot_state_->getJacobian(joint_model_group,
-                            robot_state_->getLinkModel("c"),
-                            reference_point_position, moveit_jacobian,
-                            use_quaternion_representation);
-  */
+
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(joint_model_group,
                                       robot_state_->getLinkModel("c"),
@@ -141,14 +173,13 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
                                       use_quaternion_representation);
 
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
-  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_);
+  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "c");
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
   std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_derivative << "\n\n";
 
   EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, kdl_jacobian_derivative, 1e-5);
-  //EXPECT_EQ(1.0, 1.0);
 }
 
 // Gracefully handle gtest 1.8 (Melodic)
@@ -166,8 +197,6 @@ protected:
   {
     robot_model_ = loadTestingRobotModel("panda");
     jmg_ = robot_model_->getJointModelGroup("panda_arm");
-    link_ = robot_model_->getLinkModel("panda_link8");
-    ASSERT_TRUE(link_);
   }
 
   _STATIC void TearDownTestSuite()
@@ -181,7 +210,6 @@ protected:
     SetUpTestSuite();
 #endif
     robot_state_ = std::make_shared<RobotState>(robot_model_);
-    ASSERT_TRUE(robot_state_->setToDefaultValues(jmg_, "ready"));
   }
 #ifdef _OLD_GTEST
   void TearDown() override
@@ -192,7 +220,6 @@ protected:
 protected:
   _STATIC RobotModelPtr robot_model_;
   _STATIC JointModelGroup* jmg_;
-  _STATIC const LinkModel* link_;
 
   double prec_ = 1e-8;
   RobotStatePtr robot_state_;
@@ -200,7 +227,6 @@ protected:
 #ifndef _OLD_GTEST
 RobotModelPtr PandaRobot::robot_model_;
 JointModelGroup* PandaRobot::jmg_ = nullptr;
-const LinkModel* PandaRobot::link_ = nullptr;
 #endif
 
 TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
@@ -212,10 +238,11 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
   Eigen::MatrixXd moveit_jacobian_derivative;
   bool use_quaternion_representation = false;
 
-  //-----------------------Test for this state-----------------------
+  //-----------------------Test for random state-----------------------
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
+  srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
     return (float) rand()/RAND_MAX;
   });
@@ -231,25 +258,31 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
                                         test_qdot);
   robot_state_->updateLinkTransforms(); //TODO updateLinkTransforms() is needed, but it's not needed when first calling getJacobian?
   //-----------------------Calculate Jacobian in Moveit-----------------------
-  /*robot_state_->getJacobian(joint_model_group,
-                            robot_state_->getLinkModel("c"),
+  robot_state_->getJacobian(jmg_,
+                            robot_model_->getLinkModel("panda_link8"),
                             reference_point_position, moveit_jacobian,
                             use_quaternion_representation);
-  */
+  
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(jmg_,
-                                      link_,
+                                      robot_model_->getLinkModel("panda_link8"),
                                       reference_point_position, moveit_jacobian_derivative,
                                       use_quaternion_representation);
 
+  //-----------------------Calculate Jacobian with KDL-----------------------
+  Eigen::MatrixXd kdl_jacobian = JDotTestHelpers::calculateJacobianKDL(test_q, *robot_model_, "panda_link8");
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
-  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_);
+  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "panda_link8");
+
+  //-----------------------Compare Jacobians-----------------------
+  std::cout << "Moveit Jacobian\n" << moveit_jacobian << "\n\n";
+  std::cout << "KDL Jacobian\n" << kdl_jacobian << "\n\n";
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
   std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_derivative << "\n\n";
 
-  EXPECT_EQ(1.0, 1.0);
+  EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, kdl_jacobian_derivative, 1e-5);
 }
 
 int main(int argc, char** argv)

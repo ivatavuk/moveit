@@ -1407,14 +1407,6 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
                                        const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian_derivative,
                                        bool use_quaternion_representation) const
 {
-  BOOST_VERIFY(checkLinkTransforms());
-
-  if (!group->isLinkUpdated(link->getName()))
-  {
-    ROS_ERROR_NAMED(LOGNAME, "Link name '%s' does not exist in the chain '%s' or is not a child for this chain",
-                    link->getName().c_str(), group->getName().c_str());
-    return false;
-  }
   //Quaternion representation is not supported for now
   if (use_quaternion_representation)
   {
@@ -1423,18 +1415,19 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
   }
   int rows = 6;
   int columns = group->getVariableCount();
-  jacobian_derivative = Eigen::MatrixXd::Zero(rows, columns);
+  jacobian_derivative.setZero(rows, columns);
 
   //Calculate the Jacobian
   Eigen::MatrixXd jacobian;
-  bool get_jacobian_success = getJacobian(group, link, reference_point_position, jacobian, use_quaternion_representation);
+  //jacobian computed with use_quaternion_representation = false
+  bool get_jacobian_success = getJacobian(group, link, reference_point_position, jacobian, false);
 
   if(!get_jacobian_success)
   {
     ROS_ERROR_NAMED(LOGNAME, "Jacobian compuatation failed");
     return false;  
   }
-  //Get joint velocities TODO const!
+  
   auto velocities = getJointVelocities(group->getJointModels()[0]);
 
   while(link)
@@ -1450,11 +1443,10 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
       unsigned int joint_index = group->getVariableGroupIndex(pjm->getName());
       if (pjm->getType() == moveit::core::JointModel::REVOLUTE || pjm->getType() == moveit::core::JointModel::PRISMATIC)
       {
-        for(auto pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
+        //TODO what if specified link in not the end link?
+        for(unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
         {
-          Eigen::VectorXd partial_derivative = getJacobianPartialDerivative(jacobian, pd_joint_index, joint_index);
-          jacobian_derivative.block<6, 1>(0, joint_index) =
-            jacobian_derivative.block<6, 1>(0, joint_index) + partial_derivative * velocities[pd_joint_index];
+          jacobian_derivative.col(joint_index) += getJacobianPartialDerivative(jacobian, pd_joint_index, joint_index) * velocities[pd_joint_index];
         }
       }
       else if (pjm->getType() == moveit::core::JointModel::PLANAR)
@@ -1487,34 +1479,30 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
   return true;
 }
 
-Eigen::VectorXd RobotState::getJacobianPartialDerivative(const Eigen::MatrixXd &jacobian, int joint_index , int column_index) const
+Eigen::Matrix<double, 6, 1> RobotState::getJacobianPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index) const
 {
   //Keeping MoveIt convention where twist is [v omega]^T, in KDL its [omega v]^T
-  int j=joint_index;
-  int i=column_index;
+  const Eigen::Matrix<double, 6, 1>& jac_j = jacobian.col(joint_index);
+  const Eigen::Matrix<double, 6, 1>& jac_i = jacobian.col(column_index);
 
-  Eigen::VectorXd jac_j_ = jacobian.block<6, 1>(0, j);
-  Eigen::VectorXd jac_i_ = jacobian.block<6, 1>(0, i);
+  Eigen::Matrix<double, 6, 1> t_djdq = Eigen::Matrix<double, 6, 1>::Zero();
 
-  Eigen::VectorXd t_djdq_ = Eigen::VectorXd::Zero(6);
-
-  if(j < i)
+  if(joint_index < column_index)
   {
     // P_{\Delta}({}_{bs}J^{j})  ref (20)
-    t_djdq_.segment(0, 3) = Eigen::Vector3d(jac_j_.segment(3, 3)).cross( Eigen::Vector3d(jac_i_.segment(0, 3)) );
-    t_djdq_.segment(3, 3) = Eigen::Vector3d(jac_j_.segment(3, 3)).cross( Eigen::Vector3d(jac_i_.segment(3, 3)) );
-  }else if(j > i)
+    const Eigen::Vector3d& jac_j_angular = jac_j.segment<3>(3);
+    t_djdq.segment<3>(0) = jac_j_angular.cross( jac_i.segment<3>(0) );
+    t_djdq.segment<3>(3) = jac_j_angular.cross( jac_i.segment<3>(3) );
+  }else if(joint_index > column_index)
   {
     // M_{\Delta}({}_{bs}J^{j})  ref (23)
-    t_djdq_.segment(3, 3) = Eigen::Vector3d::Zero();
-    t_djdq_.segment(0, 3) = -Eigen::Vector3d(jac_j_.segment(0, 3)).cross( Eigen::Vector3d(jac_i_.segment(3, 3)) );
-  }else if(j == i)
+    t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross( jac_i.segment<3>(3) );
+  }else if(joint_index == column_index)
   {
     // ref (40)
-    t_djdq_.segment(3, 3) = Eigen::Vector3d::Zero();
-    t_djdq_.segment(0, 3) = Eigen::Vector3d(jac_i_.segment(3, 3)).cross( Eigen::Vector3d(jac_i_.segment(0, 3)) );
+    t_djdq.segment<3>(0) = jac_i.segment<3>(3).cross( jac_i.segment<3>(0) );
   }
-  return t_djdq_;
+  return t_djdq;
 }
 
 bool RobotState::setFromDiffIK(const JointModelGroup* jmg, const Eigen::VectorXd& twist, const std::string& tip,

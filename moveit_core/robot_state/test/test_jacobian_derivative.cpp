@@ -131,6 +131,35 @@ namespace JDotTestHelpers
 
     return kdl_jacobian.data;
   }
+
+  Eigen::MatrixXd calculateNumericalJDot(RobotStatePtr robot_state,
+                                         LinkModel* link_model,
+                                         JointModelGroup* jmg,
+                                         Eigen::Vector3d reference_point_position,
+                                         const std::vector<double> &q,
+                                         const std::vector<double> &qdot,
+                                         double dt = 0.00001) 
+  {
+    //Calculater numerical JDot = (J(q + qdot*dt) - J(q)) / dq;
+    Eigen::MatrixXd J, J_plus_dt;
+
+    robot_state->setJointGroupPositions(jmg, q);
+    robot_state->setJointGroupVelocities(jmg, qdot);
+    robot_state->updateLinkTransforms();
+
+    robot_state->getJacobian(jmg, link_model, reference_point_position, J);
+
+    auto q_plus_dt = q;
+    for(auto i = 0; i < q.size(); i++)
+      q_plus_dt[i] += dt * qdot[i];
+
+    robot_state->setJointGroupPositions(jmg, q_plus_dt);
+    robot_state->updateLinkTransforms();
+
+    robot_state->getJacobian(jmg, link_model, reference_point_position, J_plus_dt);
+
+    return (J_plus_dt - J) / dt;
+  }
 }
 
 class SimpleRobot : public testing::Test
@@ -139,7 +168,7 @@ protected:
   void SetUp() override
   {
     RobotModelBuilder builder("simple", "a");
-    builder.addChain("a->b", "continuous", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
+    builder.addChain("a->b", "revolute", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
     builder.addChain("b->c", "prismatic", {}, urdf::Vector3(1, 0, 0));  //Translates along the x-axis
     builder.addGroupChain("a", "c", "group");
     robot_model_ = builder.build();
@@ -151,7 +180,7 @@ protected:
   }
 
 protected:
-  RobotModelConstPtr robot_model_;
+  RobotModelPtr robot_model_;
   RobotStatePtr robot_state_;
 };
 
@@ -161,9 +190,7 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   std::cout << "Testing SimpleRobotJacobianDerivative!\n";
 
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd moveit_jacobian;
   Eigen::MatrixXd moveit_jacobian_derivative;
-  bool use_quaternion_representation = false;
   auto joint_model_group = robot_model_->getJointModelGroup("group");
 
   //-----------------------Test for random state-----------------------
@@ -189,8 +216,7 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(joint_model_group,
                                       robot_state_->getLinkModel("c"),
-                                      reference_point_position, moveit_jacobian_derivative,
-                                      use_quaternion_representation);
+                                      reference_point_position, moveit_jacobian_derivative);
 
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
   Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "c");
@@ -253,9 +279,7 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
 {
   ROS_WARN("Testing PandaRobotJacobianDerivative!");
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd moveit_jacobian;
   Eigen::MatrixXd moveit_jacobian_derivative;
-  bool use_quaternion_representation = false;
 
   //-----------------------Test for random state-----------------------
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -276,19 +300,7 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
   robot_state_->setJointGroupVelocities(jmg_, 
                                         test_qdot);
   robot_state_->updateLinkTransforms(); //TODO updateLinkTransforms() is needed, but it's not needed when first calling getJacobian?
-  //-----------------------Calculate Jacobian in Moveit-----------------------
-  {
-    auto start = std::chrono::high_resolution_clock::now();
-    for(auto i = 0; i < NUMBER_OF_PROFILE_RUNS; i++)
-    robot_state_->getJacobian(jmg_,
-                              robot_model_->getLinkModel("panda_link8"),
-                              reference_point_position, moveit_jacobian,
-                              use_quaternion_representation);
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    std::cout << "moveit_jacobian execution time: " << duration.count() << " microseconds" << std::endl;
-  }
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   {
     //moveit::tools::Profiler::ScopedBlock("moveit_jacobian_derivative");
@@ -296,32 +308,76 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
     for(auto i = 0; i < NUMBER_OF_PROFILE_RUNS; i++)
     robot_state_->getJacobianDerivative(jmg_,
                                         robot_model_->getLinkModel("panda_link8"),
-                                        reference_point_position, moveit_jacobian_derivative,
-                                        use_quaternion_representation);
+                                        reference_point_position, moveit_jacobian_derivative);
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     std::cout << "moveit_jacobian_derivative execution time: " << duration.count() << " microseconds" << std::endl;
   }
-  //-----------------------Calculate Jacobian with KDL-----------------------
-  Eigen::MatrixXd kdl_jacobian = JDotTestHelpers::calculateJacobianKDL(test_q, *robot_model_, "panda_link8");
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
   Eigen::MatrixXd kdl_jacobian_derivative;
   {
-    //moveit::tools::Profiler::ScopedBlock("kdl_jacobian_derivative");
     kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "panda_link8");
   }
-  //-----------------------Compare Jacobians-----------------------
-  std::cout << "Moveit Jacobian\n" << moveit_jacobian << "\n\n";
-  std::cout << "KDL Jacobian\n" << kdl_jacobian << "\n\n";
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
   std::cout << "KDL Jacobian Derivative\n" << kdl_jacobian_derivative << "\n\n";
 
-  moveit::tools::Profiler::instance().console();
-
   EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, kdl_jacobian_derivative, 1e-5);
+}
+
+
+TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
+{
+  ROS_WARN("Testing testPandaRobotMidLinkJacobianDerivative!");
+  Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
+  Eigen::MatrixXd moveit_jacobian_derivative;
+  std::string link = "panda_link5";
+  //-----------------------Test for random state-----------------------
+  std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+  srand (time(NULL));
+  std::generate(test_q.begin(), test_q.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  std::generate(test_qdot.begin(), test_qdot.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  //-----------------------Set robot state-----------------------
+  robot_state_->setJointGroupPositions(jmg_, 
+                                       test_q);
+  robot_state_->setJointGroupVelocities(jmg_, 
+                                        test_qdot);
+  robot_state_->updateLinkTransforms(); //TODO updateLinkTransforms() is needed, but it's not needed when first calling getJacobian?
+
+  //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
+  {
+    //moveit::tools::Profiler::ScopedBlock("moveit_jacobian_derivative");
+    auto start = std::chrono::high_resolution_clock::now();
+    for(auto i = 0; i < NUMBER_OF_PROFILE_RUNS; i++)
+    robot_state_->getJacobianDerivative(jmg_,
+                                        robot_model_->getLinkModel(link),
+                                        reference_point_position, moveit_jacobian_derivative);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::cout << "moveit_jacobian_derivative execution time: " << duration.count() << " microseconds" << std::endl;
+  }
+  //-----------------------Calculate Numerical Jacobian Derivative-----------------------
+  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
+                                                                           robot_model_->getLinkModel(link),
+                                                                           jmg_, reference_point_position,
+                                                                           test_q, test_qdot);
+
+  //-----------------------Compare Jacobian Derivatives-----------------------
+  std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
+  std::cout << "Numerical Jacobian Derivative\n" << numerical_jdot << "\n\n";
+
+  EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, numerical_jdot, 1e-5);
 }
 
 int main(int argc, char** argv)

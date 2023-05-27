@@ -1264,7 +1264,7 @@ public:
    * \param column_index TODO
    * \return Eigen::VectorXd with 6 dimensions TODO
    */
-  Eigen::Matrix<double, 6, 1> getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index) const;
+  Eigen::Matrix<double, 6, 1> getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index, bool planar_joint = false) const;
 
   /** \brief Given a twist for a particular link (\e tip), compute the corresponding velocity for every variable and
    * store it in \e qdot */

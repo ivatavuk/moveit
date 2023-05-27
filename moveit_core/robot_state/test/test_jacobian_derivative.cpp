@@ -397,7 +397,7 @@ protected:
   void SetUp() override
   {
     RobotModelBuilder builder("simple", "a");
-    builder.addChain("a->b", "planar", {});
+    builder.addChain("a->b", "planar", {}, urdf::Vector3(0, 0, 1));
     builder.addGroupChain("a", "b", "group");
     robot_model_ = builder.build();
     robot_state_ = std::make_shared<RobotState>(robot_model_);
@@ -423,8 +423,8 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
 
   //-----------------------Test for random state-----------------------
   std::vector<double> test_q{0.0, 0.0, 0.0};
-  std::vector<double> test_qdot{0.0, 0.0, 0.0};
-
+  std::vector<double> test_qdot{0.0, 0.0, 1.0};
+  
   srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
     return (float) rand()/RAND_MAX;
@@ -433,6 +433,13 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
   std::generate(test_qdot.begin(), test_qdot.end(), []() {
     return (float) rand()/RAND_MAX;
   });
+  
+  std::cout << "q = \n";
+  for(auto q : test_q)
+    std::cout << q << "\n";
+  std::cout << "qdot = \n";
+  for(auto qdot : test_qdot)
+    std::cout << qdot << "\n";
 
   //-----------------------Set robot state-----------------------
   robot_state_->setJointGroupPositions(joint_model_group, 
@@ -440,6 +447,13 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
   robot_state_->setJointGroupVelocities(joint_model_group, 
                                         test_qdot);
   robot_state_->updateLinkTransforms();
+
+  //-----------------------Calculate Jacobian in Moveit-----------------------
+  Eigen::MatrixXd moveit_jacobian;
+  robot_state_->getJacobian(joint_model_group,
+                            robot_state_->getLinkModel("b"),
+                            reference_point_position, moveit_jacobian);
+  std::cout << "moveit_jacobian = \n" << moveit_jacobian << "\n";
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(joint_model_group,

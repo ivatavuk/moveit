@@ -117,8 +117,8 @@ namespace JDotTestHelpers
   }
 
   Eigen::MatrixXd calculateNumericalJDot(RobotStatePtr robot_state,
-                                         LinkModel* link_model,
-                                         JointModelGroup* jmg,
+                                         const LinkModel* link_model,
+                                         const JointModelGroup* jmg,
                                          Eigen::Vector3d reference_point_position,
                                          const std::vector<double> &q,
                                          const std::vector<double> &qdot,
@@ -381,6 +381,75 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
   Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
                                                                            robot_model_->getLinkModel(link),
                                                                            jmg_, reference_point_position,
+                                                                           test_q, test_qdot);
+
+  //-----------------------Compare Jacobian Derivatives-----------------------
+  std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
+  std::cout << "Numerical Jacobian Derivative\n" << numerical_jdot << "\n\n";
+
+  EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, numerical_jdot, 1e-3);
+}
+
+
+class SimplePlanarRobot : public testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    RobotModelBuilder builder("simple", "a");
+    builder.addChain("a->b", "planar", {});
+    builder.addGroupChain("a", "b", "group");
+    robot_model_ = builder.build();
+    robot_state_ = std::make_shared<RobotState>(robot_model_);
+  }
+
+  void TearDown() override
+  {
+  }
+
+protected:
+  RobotModelPtr robot_model_;
+  RobotStatePtr robot_state_;
+};
+
+
+TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
+{
+  std::cout << "Testing SimplePlanarRobotJacobianDerivative!\n";
+
+  Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
+  Eigen::MatrixXd moveit_jacobian_derivative;
+  auto joint_model_group = robot_model_->getJointModelGroup("group");
+
+  //-----------------------Test for random state-----------------------
+  std::vector<double> test_q{0.0, 0.0, 0.0};
+  std::vector<double> test_qdot{0.0, 0.0, 0.0};
+
+  srand (time(NULL));
+  std::generate(test_q.begin(), test_q.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  std::generate(test_qdot.begin(), test_qdot.end(), []() {
+    return (float) rand()/RAND_MAX;
+  });
+
+  //-----------------------Set robot state-----------------------
+  robot_state_->setJointGroupPositions(joint_model_group, 
+                                       test_q);
+  robot_state_->setJointGroupVelocities(joint_model_group, 
+                                        test_qdot);
+  robot_state_->updateLinkTransforms();
+
+  //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
+  robot_state_->getJacobianDerivative(joint_model_group,
+                                      robot_state_->getLinkModel("b"),
+                                      reference_point_position, moveit_jacobian_derivative);
+
+  //-----------------------Calculate Numerical Jacobian Derivative-----------------------
+  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
+                                                                           robot_state_->getLinkModel("b"),
+                                                                           joint_model_group, reference_point_position,
                                                                            test_q, test_qdot);
 
   //-----------------------Compare Jacobian Derivatives-----------------------

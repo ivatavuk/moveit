@@ -1435,19 +1435,32 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
         continue;
       }
       unsigned int joint_index = group->getVariableGroupIndex(pjm->getName());
-      if (pjm->getType() == moveit::core::JointModel::REVOLUTE || pjm->getType() == moveit::core::JointModel::PRISMATIC)
+      if (pjm->getType() == moveit::core::JointModel::REVOLUTE || 
+          pjm->getType() == moveit::core::JointModel::PRISMATIC )
       {
-        //TODO what if specified link in not the end link?
         for(unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
         {
-          jacobian_derivative.col(joint_index) += getJacobianPartialDerivative(jacobian, pd_joint_index, joint_index) * velocities[pd_joint_index];
+          //std::cout << "getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) = \n" << getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) << "\n";
+          //std::cout << "velocities[pd_joint_index] = \n" << velocities[pd_joint_index] << "\n";
+          jacobian_derivative.col(joint_index) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) * velocities[pd_joint_index];
         }
       }
       else if (pjm->getType() == moveit::core::JointModel::PLANAR)
+      {
+        for(unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
+        {
+          std::cout << "velocities[pd_joint_index] = \n" << velocities[pd_joint_index] << "\n";
+          jacobian_derivative.col(joint_index) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) * velocities[pd_joint_index];  
+          jacobian_derivative.col(joint_index + 1) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index + 1) * velocities[pd_joint_index];
+          jacobian_derivative.col(joint_index + 2) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index + 2) * velocities[pd_joint_index];
+        }
+      } 
+      /*else if (pjm->getType() == moveit::core::JointModel::PLANAR)
       { 
         ROS_ERROR_NAMED(LOGNAME, "JointModel::PLANAR is not supported for now");
         return false;  
       }
+      */
       else
         ROS_ERROR_NAMED(LOGNAME, "Unknown type of joint in Jacobian computation");
     }

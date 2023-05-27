@@ -1254,8 +1254,9 @@ public:
    * (default is false)
    * \return True if jacobian time derivative was successfully computed, false otherwise
    */
-  bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link, const Eigen::Vector3d& reference_point_position,
-                             Eigen::MatrixXd& jacobian_derivative, bool use_quaternion_representation = false) const;
+  bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link, 
+                             const Eigen::Vector3d& reference_point_position,
+                             Eigen::MatrixXd& jacobian_derivative) const;
 
   /** \brief Compute the partial derivative of a column of the Jacobian.
    * \param jacobian The Jacobian
@@ -1263,7 +1264,7 @@ public:
    * \param column_index TODO
    * \return Eigen::VectorXd with 6 dimensions TODO
    */
-  Eigen::Matrix<double, 6, 1> getJacobianPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index) const;
+  Eigen::Matrix<double, 6, 1> getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index) const;
 
   /** \brief Given a twist for a particular link (\e tip), compute the corresponding velocity for every variable and
    * store it in \e qdot */

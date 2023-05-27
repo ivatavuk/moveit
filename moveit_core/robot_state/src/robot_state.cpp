@@ -1404,15 +1404,9 @@ bool RobotState::getJacobian(const JointModelGroup* group, const LinkModel* link
 }
 
 bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkModel* link,
-                                       const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian_derivative,
-                                       bool use_quaternion_representation) const
+                                       const Eigen::Vector3d& reference_point_position, 
+                                       Eigen::MatrixXd& jacobian_derivative) const
 {
-  //Quaternion representation is not supported for now
-  if (use_quaternion_representation)
-  {
-    ROS_ERROR_NAMED(LOGNAME, "Quaternion representation is not supported for now");
-    return false;  
-  }
   int rows = 6;
   int columns = group->getVariableCount();
   jacobian_derivative.setZero(rows, columns);
@@ -1461,25 +1455,10 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
       break;
     link = pjm->getParentLinkModel();
   }
-  /*
-  if (use_quaternion_representation)
-  {  // Quaternion representation
-    // From "Advanced Dynamics and Motion Simulation" by Paul Mitiguy
-    // d/dt ( [w] ) = 1/2 * [ -x -y -z ]  * [ omega_1 ]
-    //        [x]           [  w -z  y ]    [ omega_2 ]
-    //        [y]           [  z  w -x ]    [ omega_3 ]
-    //        [z]           [ -y  x  w ]
-    Eigen::Quaterniond q(link_transform.linear());
-    double w = q.w(), x = q.x(), y = q.y(), z = q.z();
-    Eigen::MatrixXd quaternion_update_matrix(4, 3);
-    quaternion_update_matrix << -x, -y, -z, w, -z, y, z, w, -x, -y, x, w;
-    jacobian_derivative.block(3, 0, 4, columns) = 0.5 * quaternion_update_matrix * jacobian_derivative.block(3, 0, 3, columns);
-  }
-  */
   return true;
 }
 
-Eigen::Matrix<double, 6, 1> RobotState::getJacobianPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index) const
+Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index) const
 {
   //Keeping MoveIt convention where twist is [v omega]^T, in KDL its [omega v]^T
   const Eigen::Matrix<double, 6, 1>& jac_j = jacobian.col(joint_index);

@@ -153,7 +153,9 @@ protected:
     RobotModelBuilder builder("simple", "a");
     builder.addChain("a->b", "revolute", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
     builder.addChain("b->c", "prismatic", {}, urdf::Vector3(1, 0, 0));  //Translates along the x-axis
-    builder.addGroupChain("a", "c", "group");
+    builder.addChain("c->d", "revolute", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
+    builder.addChain("d->e", "prismatic", {}, urdf::Vector3(1, 0, 0));  //Translates along the x-axis
+    builder.addGroupChain("a", "e", "group");
     robot_model_ = builder.build();
     robot_state_ = std::make_shared<RobotState>(robot_model_);
   }
@@ -177,8 +179,8 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   auto joint_model_group = robot_model_->getJointModelGroup("group");
 
   //-----------------------Test for random state-----------------------
-  std::vector<double> test_q{0.0, 0.0};
-  std::vector<double> test_qdot{0.0, 0.0};
+  std::vector<double> test_q{ 0.0, 0.0, 0.0, 0.0 };
+  std::vector<double> test_qdot{ 0.0, 0.0, 0.0, 0.0 };
 
   srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
@@ -198,11 +200,11 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(joint_model_group,
-                                      robot_state_->getLinkModel("c"),
+                                      robot_state_->getLinkModel("e"),
                                       reference_point_position, moveit_jacobian_derivative);
 
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
-  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "c");
+  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "e");
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";

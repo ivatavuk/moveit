@@ -124,7 +124,7 @@ namespace JDotTestHelpers
                                          const std::vector<double> &qdot,
                                          double dt = 0.00001) 
   {
-    //Calculater numerical JDot = (J(q + qdot*dt) - J(q)) / dq;
+    //Calculate numerical JDot = (J(q + qdot*dt) - J(q)) / dq;
     Eigen::MatrixXd J, J_plus_dt;
 
     robot_state->setJointGroupPositions(jmg, q);
@@ -141,7 +141,6 @@ namespace JDotTestHelpers
     robot_state->updateLinkTransforms();
 
     robot_state->getJacobian(jmg, link_model, reference_point_position, J_plus_dt);
-
     return (J_plus_dt - J) / dt;
   }
 }
@@ -390,7 +389,7 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
   EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, numerical_jdot, 1e-3);
 }
 
-
+/*
 class SimplePlanarRobot : public testing::Test
 {
 protected:
@@ -398,7 +397,8 @@ protected:
   {
     RobotModelBuilder builder("simple", "a");
     builder.addChain("a->b", "planar", {}, urdf::Vector3(0, 0, 1));
-    builder.addGroupChain("a", "b", "group");
+    builder.addChain("b->c", "planar", {}, urdf::Vector3(0, 0, 1));
+    builder.addGroupChain("a", "c", "group");
     robot_model_ = builder.build();
     robot_state_ = std::make_shared<RobotState>(robot_model_);
   }
@@ -422,8 +422,8 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
   auto joint_model_group = robot_model_->getJointModelGroup("group");
 
   //-----------------------Test for random state-----------------------
-  std::vector<double> test_q{0.0, 0.0, 0.0};
-  std::vector<double> test_qdot{0.0, 0.0, 1.0};
+  std::vector<double> test_q{0.0, 0.0, 0, 0.0, 1.0, M_PI};
+  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 1.0, 0.0};
   
   srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
@@ -433,6 +433,7 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
   std::generate(test_qdot.begin(), test_qdot.end(), []() {
     return (float) rand()/RAND_MAX;
   });
+  
   
   std::cout << "q = \n";
   for(auto q : test_q)
@@ -451,18 +452,18 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
   //-----------------------Calculate Jacobian in Moveit-----------------------
   Eigen::MatrixXd moveit_jacobian;
   robot_state_->getJacobian(joint_model_group,
-                            robot_state_->getLinkModel("b"),
+                            robot_state_->getLinkModel("c"),
                             reference_point_position, moveit_jacobian);
   std::cout << "moveit_jacobian = \n" << moveit_jacobian << "\n";
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(joint_model_group,
-                                      robot_state_->getLinkModel("b"),
+                                      robot_state_->getLinkModel("c"),
                                       reference_point_position, moveit_jacobian_derivative);
 
   //-----------------------Calculate Numerical Jacobian Derivative-----------------------
   Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
-                                                                           robot_state_->getLinkModel("b"),
+                                                                           robot_state_->getLinkModel("c"),
                                                                            joint_model_group, reference_point_position,
                                                                            test_q, test_qdot);
 
@@ -472,6 +473,7 @@ TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
 
   EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, numerical_jdot, 1e-3);
 }
+*/
 
 int main(int argc, char** argv)
 {

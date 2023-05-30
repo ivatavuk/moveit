@@ -1407,12 +1407,13 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
                                        const Eigen::Vector3d& reference_point_position, 
                                        Eigen::MatrixXd& jacobian_derivative) const
 {
-  int rows = 6;
-  int columns = group->getVariableCount();
+  const int rows = 6;
+  const int columns = group->getVariableCount();
   jacobian_derivative.setZero(rows, columns);
 
   //Calculate the Jacobian
   Eigen::MatrixXd jacobian;
+
   //jacobian computed with use_quaternion_representation = false
   bool get_jacobian_success = getJacobian(group, link, reference_point_position, jacobian, false);
 
@@ -1434,28 +1435,21 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
         link = pjm->getParentLinkModel();
         continue;
       }
-      unsigned int joint_index = group->getVariableGroupIndex(pjm->getName());
-      if (pjm->getType() == moveit::core::JointModel::REVOLUTE || 
-          pjm->getType() == moveit::core::JointModel::PRISMATIC )
+      unsigned int current_joint_index = group->getVariableGroupIndex(pjm->getName());
+      if (pjm->getType() == moveit::core::JointModel::REVOLUTE || pjm->getType() == moveit::core::JointModel::PRISMATIC )
       {
+        //iterate over all joints, pd_joint_index - partial derivative joint index 
         for(unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
         {
-          //std::cout << "getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) = \n" << getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) << "\n";
-          //std::cout << "velocities[pd_joint_index] = \n" << velocities[pd_joint_index] << "\n";
-          jacobian_derivative.col(joint_index) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index) * velocities[pd_joint_index];
-        }
-      }
-      else if (pjm->getType() == moveit::core::JointModel::PLANAR)
-      {
-        for(unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
-        {
-          jacobian_derivative.col(joint_index) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index, true) * velocities[pd_joint_index];  
-          jacobian_derivative.col(joint_index + 1) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index + 1, true) * velocities[pd_joint_index];
-          jacobian_derivative.col(joint_index + 2) += getJacobianColumnPartialDerivative(jacobian, pd_joint_index, joint_index + 2, true) * velocities[pd_joint_index];
+          jacobian_derivative.col(current_joint_index) += getJacobianColumnPartialDerivative(jacobian, current_joint_index, pd_joint_index) * velocities[pd_joint_index]; 
         }
       } 
+      else if ( pjm->getType() == moveit::core::JointModel::PLANAR )
+      {
+        ROS_ERROR_NAMED(LOGNAME, "JointModel::PLANAR is not supported for Jacobian derivative computation");
+      }
       else
-        ROS_ERROR_NAMED(LOGNAME, "Unknown type of joint in Jacobian computation");
+        ROS_ERROR_NAMED(LOGNAME, "Unknown type of joint in Jacobian derivative computation");
     }
     if (pjm == group->getJointModels()[0])
       break;
@@ -1464,7 +1458,7 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
   return true;
 }
 
-Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int joint_index, int column_index, bool planar_joint) const
+Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int column_index, int joint_index) const
 {
   //Keeping MoveIt convention where twist is [v omega]^T, in KDL its [omega v]^T
   const Eigen::Matrix<double, 6, 1>& jac_j = jacobian.col(joint_index);
@@ -1472,44 +1466,18 @@ Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const
 
   Eigen::Matrix<double, 6, 1> t_djdq = Eigen::Matrix<double, 6, 1>::Zero();
 
-  //Planar joint - three dof
-  if(planar_joint)
+  if(joint_index <= column_index)
   {
-    if(joint_index >= column_index || joint_index < column_index + 3 ) 
-    {
-      t_djdq.segment<3>(0) = jac_j.segment<3>(3).cross( jac_i.segment<3>(0) );
-    }
-    else if(joint_index < column_index)
-    {
-      // P_{\Delta}({}_{bs}J^{j})  ref (20)
-      const Eigen::Vector3d& jac_j_angular = jac_j.segment<3>(3);
-      t_djdq.segment<3>(0) = jac_j_angular.cross( jac_i.segment<3>(0) );
-      t_djdq.segment<3>(3) = jac_j_angular.cross( jac_i.segment<3>(3) );
-    }else if(joint_index >= column_index + 3)
-    {
-      // M_{\Delta}({}_{bs}J^{j})  ref (23)
-      t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross( jac_i.segment<3>(3) );
-    }
+    // P_{\Delta}({}_{bs}J^{j})  ref (20)
+    const Eigen::Vector3d& jac_j_angular = jac_j.segment<3>(3);
+    t_djdq.segment<3>(0) = jac_j_angular.cross( jac_i.segment<3>(0) );
+    t_djdq.segment<3>(3) = jac_j_angular.cross( jac_i.segment<3>(3) );
   }
-  else
+  else if(joint_index > column_index)
   {
-    if(joint_index < column_index)
-    {
-      // P_{\Delta}({}_{bs}J^{j})  ref (20)
-      const Eigen::Vector3d& jac_j_angular = jac_j.segment<3>(3);
-      t_djdq.segment<3>(0) = jac_j_angular.cross( jac_i.segment<3>(0) );
-      t_djdq.segment<3>(3) = jac_j_angular.cross( jac_i.segment<3>(3) );
-    }else if(joint_index > column_index)
-    {
-      // M_{\Delta}({}_{bs}J^{j})  ref (23)
-      t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross( jac_i.segment<3>(3) );
-    }else if(joint_index == column_index)
-    {
-      // ref (40)
-      t_djdq.segment<3>(0) = jac_j.segment<3>(3).cross( jac_i.segment<3>(0) );
-    }
+    // M_{\Delta}({}_{bs}J^{j})  ref (23)
+    t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross( jac_i.segment<3>(3) );
   }
-
   return t_djdq;
 }
 

@@ -1253,9 +1253,8 @@ public:
    * \param jacobian_derivative The resultant jacobian time derivative
    * \return True if jacobian time derivative was successfully computed, false otherwise
    */
-  bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link, 
-                             const Eigen::Vector3d& reference_point_position,
-                             Eigen::MatrixXd& jacobian_derivative) const;
+  bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link, const Eigen::Vector3d& reference_point_position, 
+                             Eigen::MatrixXd& jacobian, Eigen::MatrixXd& jacobian_derivative) const;
 
   /** \brief Compute the partial derivative of a column of the Jacobian wrt a single joint.
    * \param jacobian The Jacobian matrix

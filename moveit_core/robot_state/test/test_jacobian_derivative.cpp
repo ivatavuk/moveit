@@ -175,7 +175,7 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   std::cout << "Testing SimpleRobotJacobianDerivative!\n";
 
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd moveit_jacobian_derivative;
+  Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   auto joint_model_group = robot_model_->getJointModelGroup("group");
 
   //-----------------------Test for random state-----------------------
@@ -199,9 +199,8 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   robot_state_->updateLinkTransforms();
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
-  robot_state_->getJacobianDerivative(joint_model_group,
-                                      robot_state_->getLinkModel("e"),
-                                      reference_point_position, moveit_jacobian_derivative);
+  robot_state_->getJacobianDerivative(joint_model_group, robot_state_->getLinkModel("e"),
+                                      reference_point_position, moveit_jacobian, moveit_jacobian_derivative);
 
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
   Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "e");
@@ -264,7 +263,7 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
 {
   ROS_WARN("Testing PandaRobotJacobianDerivative!");
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd moveit_jacobian_derivative;
+  Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
 
   //-----------------------Test for random state-----------------------
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -284,12 +283,12 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
                                        test_q);
   robot_state_->setJointGroupVelocities(jmg_, 
                                         test_qdot);
-  robot_state_->updateLinkTransforms(); //TODO updateLinkTransforms() is needed, but it's not needed when first calling getJacobian?
+  robot_state_->updateLinkTransforms();
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(jmg_,
                                       robot_model_->getLinkModel("panda_link8"),
-                                      reference_point_position, moveit_jacobian_derivative);
+                                      reference_point_position, moveit_jacobian, moveit_jacobian_derivative);
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
   Eigen::MatrixXd kdl_jacobian_derivative;
   {
@@ -307,7 +306,7 @@ TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
 {
   ROS_WARN("Testing testPandaRobotMidLinkJacobianDerivative!");
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd moveit_jacobian_derivative;
+  Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   std::string link = "panda_link5";
   //-----------------------Test for random state-----------------------
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -332,7 +331,7 @@ TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(jmg_,
                                       robot_model_->getLinkModel(link),
-                                      reference_point_position, moveit_jacobian_derivative);
+                                      reference_point_position, moveit_jacobian, moveit_jacobian_derivative);
 
   //-----------------------Calculate Numerical Jacobian Derivative-----------------------
   Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
@@ -351,7 +350,7 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
 {
   ROS_WARN("Testing testPandaRobotRefPointJacobianDerivative!");
   Eigen::Vector3d reference_point_position(2.0, 4.0, 5.0);
-  Eigen::MatrixXd moveit_jacobian_derivative;
+  Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   std::string link = "panda_link8";
   //-----------------------Test for random state-----------------------
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -376,7 +375,8 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
   robot_state_->getJacobianDerivative(jmg_,
                                       robot_model_->getLinkModel(link),
-                                      reference_point_position, moveit_jacobian_derivative);
+                                      reference_point_position, 
+                                      moveit_jacobian, moveit_jacobian_derivative);
 
   //-----------------------Calculate Numerical Jacobian Derivative-----------------------
   Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
@@ -390,92 +390,6 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
 
   EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, numerical_jdot, 1e-3);
 }
-
-/*
-class SimplePlanarRobot : public testing::Test
-{
-protected:
-  void SetUp() override
-  {
-    RobotModelBuilder builder("simple", "a");
-    builder.addChain("a->b", "planar", {}, urdf::Vector3(0, 0, 1));
-    builder.addChain("b->c", "planar", {}, urdf::Vector3(0, 0, 1));
-    builder.addGroupChain("a", "c", "group");
-    robot_model_ = builder.build();
-    robot_state_ = std::make_shared<RobotState>(robot_model_);
-  }
-
-  void TearDown() override
-  {
-  }
-
-protected:
-  RobotModelPtr robot_model_;
-  RobotStatePtr robot_state_;
-};
-
-
-TEST_F(SimplePlanarRobot, testSimplePlanarJacobianDerivative)
-{
-  std::cout << "Testing SimplePlanarRobotJacobianDerivative!\n";
-
-  Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  Eigen::MatrixXd moveit_jacobian_derivative;
-  auto joint_model_group = robot_model_->getJointModelGroup("group");
-
-  //-----------------------Test for random state-----------------------
-  std::vector<double> test_q{0.0, 0.0, 0, 0.0, 1.0, M_PI};
-  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 1.0, 0.0};
-  
-  srand (time(NULL));
-  std::generate(test_q.begin(), test_q.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
-
-  std::generate(test_qdot.begin(), test_qdot.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
-  
-  
-  std::cout << "q = \n";
-  for(auto q : test_q)
-    std::cout << q << "\n";
-  std::cout << "qdot = \n";
-  for(auto qdot : test_qdot)
-    std::cout << qdot << "\n";
-
-  //-----------------------Set robot state-----------------------
-  robot_state_->setJointGroupPositions(joint_model_group, 
-                                       test_q);
-  robot_state_->setJointGroupVelocities(joint_model_group, 
-                                        test_qdot);
-  robot_state_->updateLinkTransforms();
-
-  //-----------------------Calculate Jacobian in Moveit-----------------------
-  Eigen::MatrixXd moveit_jacobian;
-  robot_state_->getJacobian(joint_model_group,
-                            robot_state_->getLinkModel("c"),
-                            reference_point_position, moveit_jacobian);
-  std::cout << "moveit_jacobian = \n" << moveit_jacobian << "\n";
-
-  //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
-  robot_state_->getJacobianDerivative(joint_model_group,
-                                      robot_state_->getLinkModel("c"),
-                                      reference_point_position, moveit_jacobian_derivative);
-
-  //-----------------------Calculate Numerical Jacobian Derivative-----------------------
-  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
-                                                                           robot_state_->getLinkModel("c"),
-                                                                           joint_model_group, reference_point_position,
-                                                                           test_q, test_qdot);
-
-  //-----------------------Compare Jacobian Derivatives-----------------------
-  std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
-  std::cout << "Numerical Jacobian Derivative\n" << numerical_jdot << "\n\n";
-
-  EXPECT_EIGEN_NEAR(moveit_jacobian_derivative, numerical_jdot, 1e-3);
-}
-*/
 
 int main(int argc, char** argv)
 {

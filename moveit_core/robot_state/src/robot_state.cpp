@@ -1404,17 +1404,14 @@ bool RobotState::getJacobian(const JointModelGroup* group, const LinkModel* link
 }
 
 bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkModel* link,
-                                       const Eigen::Vector3d& reference_point_position, 
+                                       const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian, 
                                        Eigen::MatrixXd& jacobian_derivative) const
 {
   const int rows = 6;
   const int columns = group->getVariableCount();
   jacobian_derivative.setZero(rows, columns);
 
-  //Calculate the Jacobian
-  Eigen::MatrixXd jacobian;
-
-  //jacobian computed with use_quaternion_representation = false
+  //Calculate the Jacobian with use_quaternion_representation = false
   bool get_jacobian_success = getJacobian(group, link, reference_point_position, jacobian, false);
 
   if(!get_jacobian_success)

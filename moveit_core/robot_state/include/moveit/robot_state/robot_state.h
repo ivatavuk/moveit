@@ -1245,7 +1245,7 @@ public:
     return static_cast<const RobotState*>(this)->getJacobian(group, reference_point_position);
   }
 
-  /** \brief Compute the time derivative of the Jacobian with reference to a particular point on a given link, for a 
+  /** \brief Compute the time derivative of the Jacobian with reference to a particular point on a given link, for a
    * specified group.
    * \param group The group to compute the Jacobian time derivative for
    * \param link The link model to compute the Jacobian time derivative for
@@ -1253,17 +1253,18 @@ public:
    * \param jacobian_derivative The resultant jacobian time derivative
    * \return True if jacobian time derivative was successfully computed, false otherwise
    */
-  bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link, const Eigen::Vector3d& reference_point_position, 
-                             Eigen::MatrixXd& jacobian, Eigen::MatrixXd& jacobian_derivative) const;
+  bool getJacobianDerivative(const JointModelGroup* group, const LinkModel* link,
+                             const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian,
+                             Eigen::MatrixXd& jacobian_derivative) const;
 
   /** \brief Compute the partial derivative of a column of the Jacobian wrt a single joint.
    * \param jacobian The Jacobian matrix
    * \param column_index Column of the Jacobian to compute the partial derivative for
    * \param joint_index Joint index to compute the partial derivative with respect to
-   * \return Eigen::Matrix<double, 6, 1> Partial derivative of a Jacobian column wrt a single joint 
+   * \return Eigen::Matrix<double, 6, 1> Partial derivative of a Jacobian column wrt a single joint
    */
-  Eigen::Matrix<double, 6, 1> getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int column_index, 
-                                                                 int joint_index ) const;
+  Eigen::Matrix<double, 6, 1> getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int column_index,
+                                                                 int joint_index) const;
 
   /** \brief Given a twist for a particular link (\e tip), compute the corresponding velocity for every variable and
    * store it in \e qdot */

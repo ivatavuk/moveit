@@ -48,102 +48,94 @@ using namespace moveit::core;
 
 namespace JDotTestHelpers
 {
-  KDL::Chain setupKdlChain(const RobotModel &robot_model,
-                           const std::string &tip_link)
+KDL::Chain setupKdlChain(const RobotModel& robot_model, const std::string& tip_link)
+{
+  KDL::Chain kdl_chain;
+  KDL::Tree tree;
+  if (!kdl_parser::treeFromUrdfModel(*(robot_model.getURDF()), tree))
   {
-    KDL::Chain kdl_chain;
-    KDL::Tree tree;
-    if (!kdl_parser::treeFromUrdfModel( *(robot_model.getURDF()), tree) )
-    {
-      ROS_ERROR("Could not initialize tree object");
-    }
-    auto link_models = robot_model.getLinkModels();
-    auto root_model = link_models[0]->getName();
-    
-    if (!tree.getChain(root_model, tip_link, kdl_chain))
-    {
-      ROS_ERROR_STREAM("Could not initialize chain object for base " << root_model << " tip " << tip_link);
-    }
-    return kdl_chain;
+    ROS_ERROR("Could not initialize tree object");
   }
+  auto link_models = robot_model.getLinkModels();
+  auto root_model = link_models[0]->getName();
 
-  KDL::JntArrayVel setupKdlJntArrayVel(const std::vector<double> &q, 
-                                       const std::vector<double> &q_dot)
+  if (!tree.getChain(root_model, tip_link, kdl_chain))
   {
-    KDL::JntArray kdl_jnt_array(q.size());
-    kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
-
-    KDL::JntArray kdl_jnt_array_qdot(q_dot.size());
-    kdl_jnt_array_qdot.data = Eigen::VectorXd::Map(q_dot.data(), q_dot.size());
-
-    KDL::JntArrayVel kdl_jnt_array_vel;
-    kdl_jnt_array_vel.q = kdl_jnt_array;
-    kdl_jnt_array_vel.qdot = kdl_jnt_array_qdot;
-    return kdl_jnt_array_vel;
+    ROS_ERROR_STREAM("Could not initialize chain object for base " << root_model << " tip " << tip_link);
   }
-
-  Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double> &q, 
-                                                 const std::vector<double> &q_dot,
-                                                 const RobotModel &robot_model,
-                                                 const std::string &tip_link) 
-  {
-    KDL::Chain kdl_chain = setupKdlChain(robot_model, tip_link);
-
-    KDL::JntArrayVel kdl_jnt_array_vel = setupKdlJntArrayVel(q, q_dot);
-
-    KDL::ChainJntToJacDotSolver kdl_jacobian_dot_solver(kdl_chain);
-    KDL::Jacobian kdl_jacobian_dot(kdl_chain.getNrOfJoints());
-
-    kdl_jacobian_dot_solver.JntToJacDot(kdl_jnt_array_vel, kdl_jacobian_dot);
-
-    return kdl_jacobian_dot.data;
-  }
-  
-  Eigen::MatrixXd calculateJacobianKDL(const std::vector<double> &q,
-                                       const RobotModel &robot_model,
-                                       const std::string &tip_link) 
-  {
-    KDL::Chain kdl_chain = setupKdlChain(robot_model, tip_link);
-
-    KDL::JntArray kdl_jnt_array(q.size());
-    kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
-
-    KDL::ChainJntToJacSolver kdl_jacobian_solver(kdl_chain);
-    KDL::Jacobian kdl_jacobian(kdl_chain.getNrOfJoints());
-    
-    kdl_jacobian_solver.JntToJac(kdl_jnt_array, kdl_jacobian);
-
-    return kdl_jacobian.data;
-  }
-
-  Eigen::MatrixXd calculateNumericalJDot(RobotStatePtr robot_state,
-                                         const LinkModel* link_model,
-                                         const JointModelGroup* jmg,
-                                         Eigen::Vector3d reference_point_position,
-                                         const std::vector<double> &q,
-                                         const std::vector<double> &qdot,
-                                         double dt = 0.00001) 
-  {
-    //Calculate numerical JDot = (J(q + qdot*dt) - J(q)) / dq;
-    Eigen::MatrixXd J, J_plus_dt;
-
-    robot_state->setJointGroupPositions(jmg, q);
-    robot_state->setJointGroupVelocities(jmg, qdot);
-    robot_state->updateLinkTransforms();
-
-    robot_state->getJacobian(jmg, link_model, reference_point_position, J);
-
-    auto q_plus_dt = q;
-    for(unsigned int i = 0; i < q.size(); i++)
-      q_plus_dt[i] += dt * qdot[i];
-
-    robot_state->setJointGroupPositions(jmg, q_plus_dt);
-    robot_state->updateLinkTransforms();
-
-    robot_state->getJacobian(jmg, link_model, reference_point_position, J_plus_dt);
-    return (J_plus_dt - J) / dt;
-  }
+  return kdl_chain;
 }
+
+KDL::JntArrayVel setupKdlJntArrayVel(const std::vector<double>& q, const std::vector<double>& q_dot)
+{
+  KDL::JntArray kdl_jnt_array(q.size());
+  kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
+
+  KDL::JntArray kdl_jnt_array_qdot(q_dot.size());
+  kdl_jnt_array_qdot.data = Eigen::VectorXd::Map(q_dot.data(), q_dot.size());
+
+  KDL::JntArrayVel kdl_jnt_array_vel;
+  kdl_jnt_array_vel.q = kdl_jnt_array;
+  kdl_jnt_array_vel.qdot = kdl_jnt_array_qdot;
+  return kdl_jnt_array_vel;
+}
+
+Eigen::MatrixXd calculateJacobianDerivativeKDL(const std::vector<double>& q, const std::vector<double>& q_dot,
+                                               const RobotModel& robot_model, const std::string& tip_link)
+{
+  KDL::Chain kdl_chain = setupKdlChain(robot_model, tip_link);
+
+  KDL::JntArrayVel kdl_jnt_array_vel = setupKdlJntArrayVel(q, q_dot);
+
+  KDL::ChainJntToJacDotSolver kdl_jacobian_dot_solver(kdl_chain);
+  KDL::Jacobian kdl_jacobian_dot(kdl_chain.getNrOfJoints());
+
+  kdl_jacobian_dot_solver.JntToJacDot(kdl_jnt_array_vel, kdl_jacobian_dot);
+
+  return kdl_jacobian_dot.data;
+}
+
+Eigen::MatrixXd calculateJacobianKDL(const std::vector<double>& q, const RobotModel& robot_model,
+                                     const std::string& tip_link)
+{
+  KDL::Chain kdl_chain = setupKdlChain(robot_model, tip_link);
+
+  KDL::JntArray kdl_jnt_array(q.size());
+  kdl_jnt_array.data = Eigen::VectorXd::Map(q.data(), q.size());
+
+  KDL::ChainJntToJacSolver kdl_jacobian_solver(kdl_chain);
+  KDL::Jacobian kdl_jacobian(kdl_chain.getNrOfJoints());
+
+  kdl_jacobian_solver.JntToJac(kdl_jnt_array, kdl_jacobian);
+
+  return kdl_jacobian.data;
+}
+
+Eigen::MatrixXd calculateNumericalJDot(RobotStatePtr robot_state, const LinkModel* link_model,
+                                       const JointModelGroup* jmg, Eigen::Vector3d reference_point_position,
+                                       const std::vector<double>& q, const std::vector<double>& qdot,
+                                       double dt = 0.00001)
+{
+  // Calculate numerical JDot = (J(q + qdot*dt) - J(q)) / dq;
+  Eigen::MatrixXd J, J_plus_dt;
+
+  robot_state->setJointGroupPositions(jmg, q);
+  robot_state->setJointGroupVelocities(jmg, qdot);
+  robot_state->updateLinkTransforms();
+
+  robot_state->getJacobian(jmg, link_model, reference_point_position, J);
+
+  auto q_plus_dt = q;
+  for (unsigned int i = 0; i < q.size(); i++)
+    q_plus_dt[i] += dt * qdot[i];
+
+  robot_state->setJointGroupPositions(jmg, q_plus_dt);
+  robot_state->updateLinkTransforms();
+
+  robot_state->getJacobian(jmg, link_model, reference_point_position, J_plus_dt);
+  return (J_plus_dt - J) / dt;
+}
+}  // namespace JDotTestHelpers
 
 class SimpleRobot : public testing::Test
 {
@@ -151,10 +143,10 @@ protected:
   void SetUp() override
   {
     RobotModelBuilder builder("simple", "a");
-    builder.addChain("a->b", "revolute", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
-    builder.addChain("b->c", "prismatic", {}, urdf::Vector3(1, 0, 0));  //Translates along the x-axis
-    builder.addChain("c->d", "revolute", {}, urdf::Vector3(0, 0, 1)); //Rotates around the z-axis
-    builder.addChain("d->e", "prismatic", {}, urdf::Vector3(1, 0, 0));  //Translates along the x-axis
+    builder.addChain("a->b", "revolute", {}, urdf::Vector3(0, 0, 1));   // Rotates around the z-axis
+    builder.addChain("b->c", "prismatic", {}, urdf::Vector3(1, 0, 0));  // Translates along the x-axis
+    builder.addChain("c->d", "revolute", {}, urdf::Vector3(0, 0, 1));   // Rotates around the z-axis
+    builder.addChain("d->e", "prismatic", {}, urdf::Vector3(1, 0, 0));  // Translates along the x-axis
     builder.addGroupChain("a", "e", "group");
     robot_model_ = builder.build();
     robot_state_ = std::make_shared<RobotState>(robot_model_);
@@ -169,7 +161,6 @@ protected:
   RobotStatePtr robot_state_;
 };
 
-
 TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
 {
   std::cout << "Testing SimpleRobotJacobianDerivative\n";
@@ -182,27 +173,22 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   std::vector<double> test_q{ 0.0, 0.0, 0.0, 0.0 };
   std::vector<double> test_qdot{ 0.0, 0.0, 0.0, 0.0 };
 
-  std::generate(test_q.begin(), test_q.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_q.begin(), test_q.end(), []() { return (float)rand() / RAND_MAX; });
 
-  std::generate(test_qdot.begin(), test_qdot.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_qdot.begin(), test_qdot.end(), []() { return (float)rand() / RAND_MAX; });
 
   //-----------------------Set robot state-----------------------
-  robot_state_->setJointGroupPositions(joint_model_group, 
-                                       test_q);
-  robot_state_->setJointGroupVelocities(joint_model_group, 
-                                        test_qdot);
+  robot_state_->setJointGroupPositions(joint_model_group, test_q);
+  robot_state_->setJointGroupVelocities(joint_model_group, test_qdot);
   robot_state_->updateLinkTransforms();
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
-  robot_state_->getJacobianDerivative(joint_model_group, robot_state_->getLinkModel("e"),
-                                      reference_point_position, moveit_jacobian, moveit_jacobian_derivative);
+  robot_state_->getJacobianDerivative(joint_model_group, robot_state_->getLinkModel("e"), reference_point_position,
+                                      moveit_jacobian, moveit_jacobian_derivative);
 
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
-  Eigen::MatrixXd kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "e");
+  Eigen::MatrixXd kdl_jacobian_derivative =
+      JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "e");
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
@@ -265,32 +251,26 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
 
   //-----------------------Test for random state-----------------------
-  std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  std::vector<double> test_q{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+  std::vector<double> test_qdot{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
-  std::generate(test_q.begin(), test_q.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_q.begin(), test_q.end(), []() { return (float)rand() / RAND_MAX; });
 
-  std::generate(test_qdot.begin(), test_qdot.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_qdot.begin(), test_qdot.end(), []() { return (float)rand() / RAND_MAX; });
 
   //-----------------------Set robot state-----------------------
-  robot_state_->setJointGroupPositions(jmg_, 
-                                       test_q);
-  robot_state_->setJointGroupVelocities(jmg_, 
-                                        test_qdot);
+  robot_state_->setJointGroupPositions(jmg_, test_q);
+  robot_state_->setJointGroupVelocities(jmg_, test_qdot);
   robot_state_->updateLinkTransforms();
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
-  robot_state_->getJacobianDerivative(jmg_,
-                                      robot_model_->getLinkModel("panda_link8"),
-                                      reference_point_position, moveit_jacobian, moveit_jacobian_derivative);
+  robot_state_->getJacobianDerivative(jmg_, robot_model_->getLinkModel("panda_link8"), reference_point_position,
+                                      moveit_jacobian, moveit_jacobian_derivative);
   //-----------------------Calculate Jacobian Derivative with KDL-----------------------
   Eigen::MatrixXd kdl_jacobian_derivative;
   {
-    kdl_jacobian_derivative = JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "panda_link8");
+    kdl_jacobian_derivative =
+        JDotTestHelpers::calculateJacobianDerivativeKDL(test_q, test_qdot, *robot_model_, "panda_link8");
   }
 
   //-----------------------Compare Jacobian Derivatives-----------------------
@@ -307,34 +287,25 @@ TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   std::string link = "panda_link5";
   //-----------------------Test for random state-----------------------
-  std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  std::vector<double> test_q{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+  std::vector<double> test_qdot{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
-  std::generate(test_q.begin(), test_q.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_q.begin(), test_q.end(), []() { return (float)rand() / RAND_MAX; });
 
-  std::generate(test_qdot.begin(), test_qdot.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_qdot.begin(), test_qdot.end(), []() { return (float)rand() / RAND_MAX; });
 
   //-----------------------Set robot state-----------------------
-  robot_state_->setJointGroupPositions(jmg_, 
-                                       test_q);
-  robot_state_->setJointGroupVelocities(jmg_, 
-                                        test_qdot);
+  robot_state_->setJointGroupPositions(jmg_, test_q);
+  robot_state_->setJointGroupVelocities(jmg_, test_qdot);
   robot_state_->updateLinkTransforms();
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
-  robot_state_->getJacobianDerivative(jmg_,
-                                      robot_model_->getLinkModel(link),
-                                      reference_point_position, moveit_jacobian, moveit_jacobian_derivative);
+  robot_state_->getJacobianDerivative(jmg_, robot_model_->getLinkModel(link), reference_point_position, moveit_jacobian,
+                                      moveit_jacobian_derivative);
 
   //-----------------------Calculate Numerical Jacobian Derivative-----------------------
-  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
-                                                                           robot_model_->getLinkModel(link),
-                                                                           jmg_, reference_point_position,
-                                                                           test_q, test_qdot);
+  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(
+      robot_state_, robot_model_->getLinkModel(link), jmg_, reference_point_position, test_q, test_qdot);
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";
@@ -350,35 +321,25 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   std::string link = "panda_link8";
   //-----------------------Test for random state-----------------------
-  std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  std::vector<double> test_q{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+  std::vector<double> test_qdot{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
-  std::generate(test_q.begin(), test_q.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_q.begin(), test_q.end(), []() { return (float)rand() / RAND_MAX; });
 
-  std::generate(test_qdot.begin(), test_qdot.end(), []() {
-    return (float) rand()/RAND_MAX;
-  });
+  std::generate(test_qdot.begin(), test_qdot.end(), []() { return (float)rand() / RAND_MAX; });
 
   //-----------------------Set robot state-----------------------
-  robot_state_->setJointGroupPositions(jmg_, 
-                                       test_q);
-  robot_state_->setJointGroupVelocities(jmg_, 
-                                        test_qdot);
+  robot_state_->setJointGroupPositions(jmg_, test_q);
+  robot_state_->setJointGroupVelocities(jmg_, test_qdot);
   robot_state_->updateLinkTransforms();
 
   //-----------------------Calculate Jacobian Derivative in Moveit-----------------------
-  robot_state_->getJacobianDerivative(jmg_,
-                                      robot_model_->getLinkModel(link),
-                                      reference_point_position, 
-                                      moveit_jacobian, moveit_jacobian_derivative);
+  robot_state_->getJacobianDerivative(jmg_, robot_model_->getLinkModel(link), reference_point_position, moveit_jacobian,
+                                      moveit_jacobian_derivative);
 
   //-----------------------Calculate Numerical Jacobian Derivative-----------------------
-  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(robot_state_,
-                                                                           robot_model_->getLinkModel(link),
-                                                                           jmg_, reference_point_position,
-                                                                           test_q, test_qdot);
+  Eigen::MatrixXd numerical_jdot = JDotTestHelpers::calculateNumericalJDot(
+      robot_state_, robot_model_->getLinkModel(link), jmg_, reference_point_position, test_q, test_qdot);
 
   //-----------------------Compare Jacobian Derivatives-----------------------
   std::cout << "Moveit Jacobian Derivative\n" << moveit_jacobian_derivative << "\n\n";

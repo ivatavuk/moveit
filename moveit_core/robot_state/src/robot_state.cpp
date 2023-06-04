@@ -1404,25 +1404,25 @@ bool RobotState::getJacobian(const JointModelGroup* group, const LinkModel* link
 }
 
 bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkModel* link,
-                                       const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian, 
+                                       const Eigen::Vector3d& reference_point_position, Eigen::MatrixXd& jacobian,
                                        Eigen::MatrixXd& jacobian_derivative) const
 {
   const int rows = 6;
   const int columns = group->getVariableCount();
   jacobian_derivative.setZero(rows, columns);
 
-  //Calculate the Jacobian with use_quaternion_representation = false
+  // Calculate the Jacobian with use_quaternion_representation = false
   bool get_jacobian_success = getJacobian(group, link, reference_point_position, jacobian, false);
 
-  if(!get_jacobian_success)
+  if (!get_jacobian_success)
   {
     ROS_ERROR_NAMED(LOGNAME, "Jacobian compuatation failed");
-    return false;  
+    return false;
   }
-  
+
   auto velocities = getJointVelocities(group->getJointModels()[0]);
 
-  while(link)
+  while (link)
   {
     const JointModel* pjm = link->getParentJointModel();
     if (pjm->getVariableCount() > 0)
@@ -1433,15 +1433,17 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
         continue;
       }
       unsigned int current_joint_index = group->getVariableGroupIndex(pjm->getName());
-      if (pjm->getType() == moveit::core::JointModel::REVOLUTE || pjm->getType() == moveit::core::JointModel::PRISMATIC )
+      if (pjm->getType() == moveit::core::JointModel::REVOLUTE || pjm->getType() == moveit::core::JointModel::PRISMATIC)
       {
-        //iterate over all joints, pd_joint_index - partial derivative joint index 
-        for(unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
+        // iterate over all joints, pd_joint_index - partial derivative joint index
+        for (unsigned int pd_joint_index = 0; pd_joint_index < group->getVariableCount(); pd_joint_index++)
         {
-          jacobian_derivative.col(current_joint_index) += getJacobianColumnPartialDerivative(jacobian, current_joint_index, pd_joint_index) * velocities[pd_joint_index]; 
+          jacobian_derivative.col(current_joint_index) +=
+              getJacobianColumnPartialDerivative(jacobian, current_joint_index, pd_joint_index) *
+              velocities[pd_joint_index];
         }
-      } 
-      else if ( pjm->getType() == moveit::core::JointModel::PLANAR )
+      }
+      else if (pjm->getType() == moveit::core::JointModel::PLANAR)
       {
         ROS_ERROR_NAMED(LOGNAME, "JointModel::PLANAR is not supported for Jacobian derivative computation");
       }
@@ -1455,25 +1457,26 @@ bool RobotState::getJacobianDerivative(const JointModelGroup* group, const LinkM
   return true;
 }
 
-Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int column_index, int joint_index) const
+Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian,
+                                                                           int column_index, int joint_index) const
 {
-  //Keeping MoveIt convention where twist is [v omega]^T, in KDL its [omega v]^T
+  // Keeping MoveIt convention where twist is [v omega]^T, in KDL its [omega v]^T
   const Eigen::Matrix<double, 6, 1>& jac_j = jacobian.col(joint_index);
   const Eigen::Matrix<double, 6, 1>& jac_i = jacobian.col(column_index);
 
   Eigen::Matrix<double, 6, 1> t_djdq = Eigen::Matrix<double, 6, 1>::Zero();
 
-  if(joint_index <= column_index)
+  if (joint_index <= column_index)
   {
     // P_{\Delta}({}_{bs}J^{j})  ref (20)
     const Eigen::Vector3d& jac_j_angular = jac_j.segment<3>(3);
-    t_djdq.segment<3>(0) = jac_j_angular.cross( jac_i.segment<3>(0) );
-    t_djdq.segment<3>(3) = jac_j_angular.cross( jac_i.segment<3>(3) );
+    t_djdq.segment<3>(0) = jac_j_angular.cross(jac_i.segment<3>(0));
+    t_djdq.segment<3>(3) = jac_j_angular.cross(jac_i.segment<3>(3));
   }
-  else if(joint_index > column_index)
+  else if (joint_index > column_index)
   {
     // M_{\Delta}({}_{bs}J^{j})  ref (23)
-    t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross( jac_i.segment<3>(3) );
+    t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross(jac_i.segment<3>(3));
   }
   return t_djdq;
 }

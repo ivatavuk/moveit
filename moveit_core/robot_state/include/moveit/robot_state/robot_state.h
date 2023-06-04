@@ -1247,9 +1247,17 @@ public:
 
   /** \brief Compute the time derivative of the Jacobian with reference to a particular point on a given link, for a
    * specified group.
+   *
+   * Based on KDL's ChainJntToJacDotSolver implementation and:
+   * Symbolic differentiation of the velocity mapping for a serial kinematic chain
+   * H. Bruyninckx, J. De Schutter
+   * doi:10.1016/0094-114X(95)00069-B
+   * url : http://www.sciencedirect.com/science/article/pii/0094114X9500069B
+   *
    * \param group The group to compute the Jacobian time derivative for
    * \param link The link model to compute the Jacobian time derivative for
    * \param reference_point_position The reference point position (with respect to the link specified in link)
+   * \param jacobian The resultant jacobian
    * \param jacobian_derivative The resultant jacobian time derivative
    * \return True if jacobian time derivative was successfully computed, false otherwise
    */
@@ -1261,7 +1269,7 @@ public:
    * \param jacobian The Jacobian matrix
    * \param column_index Column of the Jacobian to compute the partial derivative for
    * \param joint_index Joint index to compute the partial derivative with respect to
-   * \return Eigen::Matrix<double, 6, 1> Partial derivative of a Jacobian column wrt a single joint
+   * \return Partial derivative of a Jacobian column wrt a single joint
    */
   Eigen::Matrix<double, 6, 1> getJacobianColumnPartialDerivative(const Eigen::MatrixXd& jacobian, int column_index,
                                                                  int joint_index) const;

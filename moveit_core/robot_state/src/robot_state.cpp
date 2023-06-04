@@ -1468,14 +1468,14 @@ Eigen::Matrix<double, 6, 1> RobotState::getJacobianColumnPartialDerivative(const
 
   if (joint_index <= column_index)
   {
-    // P_{\Delta}({}_{bs}J^{j})  ref (20)
+    // ref (20)
     const Eigen::Vector3d& jac_j_angular = jac_j.segment<3>(3);
     t_djdq.segment<3>(0) = jac_j_angular.cross(jac_i.segment<3>(0));
     t_djdq.segment<3>(3) = jac_j_angular.cross(jac_i.segment<3>(3));
   }
   else if (joint_index > column_index)
   {
-    // M_{\Delta}({}_{bs}J^{j})  ref (23)
+    // ref (23)
     t_djdq.segment<3>(0) = -jac_j.segment<3>(0).cross(jac_i.segment<3>(3));
   }
   return t_djdq;

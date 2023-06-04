@@ -134,7 +134,7 @@ namespace JDotTestHelpers
     robot_state->getJacobian(jmg, link_model, reference_point_position, J);
 
     auto q_plus_dt = q;
-    for(auto i = 0; i < q.size(); i++)
+    for(unsigned int i = 0; i < q.size(); i++)
       q_plus_dt[i] += dt * qdot[i];
 
     robot_state->setJointGroupPositions(jmg, q_plus_dt);
@@ -172,7 +172,7 @@ protected:
 
 TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
 {
-  std::cout << "Testing SimpleRobotJacobianDerivative!\n";
+  std::cout << "Testing SimpleRobotJacobianDerivative\n";
 
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
@@ -182,7 +182,6 @@ TEST_F(SimpleRobot, testSimpleRobotJacobianDerivative)
   std::vector<double> test_q{ 0.0, 0.0, 0.0, 0.0 };
   std::vector<double> test_qdot{ 0.0, 0.0, 0.0, 0.0 };
 
-  srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
     return (float) rand()/RAND_MAX;
   });
@@ -261,7 +260,7 @@ JointModelGroup* PandaRobot::jmg_ = nullptr;
 
 TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
 {
-  ROS_WARN("Testing PandaRobotJacobianDerivative!");
+  ROS_WARN("Testing PandaRobotJacobianDerivative");
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
 
@@ -269,7 +268,6 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-  srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
     return (float) rand()/RAND_MAX;
   });
@@ -304,7 +302,7 @@ TEST_F(PandaRobot, testPandaRobotJacobianDerivative)
 
 TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
 {
-  ROS_WARN("Testing testPandaRobotMidLinkJacobianDerivative!");
+  ROS_WARN("Testing testPandaRobotMidLinkJacobianDerivative");
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   std::string link = "panda_link5";
@@ -312,7 +310,6 @@ TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-  srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
     return (float) rand()/RAND_MAX;
   });
@@ -348,7 +345,7 @@ TEST_F(PandaRobot, testPandaRobotMidLinkJacobianDerivative)
 
 TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
 {
-  ROS_WARN("Testing testPandaRobotRefPointJacobianDerivative!");
+  ROS_WARN("Testing testPandaRobotRefPointJacobianDerivative");
   Eigen::Vector3d reference_point_position(2.0, 4.0, 5.0);
   Eigen::MatrixXd moveit_jacobian, moveit_jacobian_derivative;
   std::string link = "panda_link8";
@@ -356,7 +353,6 @@ TEST_F(PandaRobot, testPandaRobotRefPointJacobianDerivative)
   std::vector<double> test_q{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   std::vector<double> test_qdot{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-  srand (time(NULL));
   std::generate(test_q.begin(), test_q.end(), []() {
     return (float) rand()/RAND_MAX;
   });
